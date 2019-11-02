@@ -1,0 +1,39 @@
+{
+    "configurations": [
+        {
+            "name": "Win32",
+            "includePath": [
+                "D:\\tools\\arduino-1.8.10\\hardware\\arduino\\avr\\**",
+                "D:\\tools\\arduino-1.8.10\\tools\\**"
+            ],
+            "forcedInclude": [
+                "D:\\tools\\arduino-1.8.10\\hardware\\arduino\\avr\\cores\\arduino\\Arduino.h"
+            ],
+            "intelliSenseMode": "msvc-x64",
+            "compilerPath": "C:/Program Files (x86)/Microsoft Visual Studio/2019/Community/VC/Tools/MSVC/14.23.28105/bin/Hostx64/x64/cl.exe",
+            "cStandard": "c11",
+            "cppStandard": "c++17"
+        },
+        {
+            "name": "AVR",
+            "includePath": [
+                "${workspaceFolder}/**",
+                "${config:arduino.path}\\hardware\\tools\\avr\\avr\\include",
+                "${config:arduino.path}\\hardware\\arduino\\avr\\cores\\arduino",
+                "${config:arduino.path}\\hardware\\arduino\\avr\\variants\\eightanaloginputs"
+            ],
+            "defines": [
+                "_DEBUG",
+                "UNICODE",
+                "_UNICODE",
+                "__AVR_ATmega328P__"
+            ],
+            "windowsSdkVersion": "10.0.18362.0",
+            "compilerPath": "${config:arduino.path}\\hardware\\tools\\avr\\bin\\avr-gcc.exe",
+            "cStandard": "c11",
+            "cppStandard": "c++17",
+            "intelliSenseMode": "gcc-x86"
+        }
+    ],
+    "version": 4
+}
