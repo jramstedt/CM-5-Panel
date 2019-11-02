@@ -121,7 +121,7 @@ static uint16_t get_random_bit(void) {
 
 // the loop function runs over and over again forever
 void loop() {
-  for (int row = NUM_ROWS - 1; row >= 0; --row) {
+  for (int8_t row = NUM_ROWS - 1; row >= 0; --row) {
     uint16_t bit = get_random_bit();
 
     if (row & 4) // Shift in groups of four rows
@@ -147,9 +147,9 @@ void writeRows() {
   SET_LOW(pinSTR);
 
   for (uint8_t cm5row = 0; cm5row < NUM_ROWS; ++cm5row) { // 32 pixels per matrix panel row
-    SET_HIGH(pinSCK);
-    if (rows[cm5row] & (1 << cm5column)) SET_HIGH(pinR); else SET_LOW(pinR);
     SET_LOW(pinSCK);
+    if (rows[cm5row] & (1 << cm5column)) SET_HIGH(pinR); else SET_LOW(pinR);
+    SET_HIGH(pinSCK);
   }
 
   if (ledRow & 0x01) SET_HIGH(pinA); else SET_LOW(pinA);
