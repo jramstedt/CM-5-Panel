@@ -69,12 +69,8 @@ uint16_t rnum = RNUM_SEED;
 
 #pragma endregion
 
-
 // the setup function runs once when you press reset or power the board
 void setup() {
-  // initialize digital pin LED_BUILTIN as an output.
-  pinMode(LED_BUILTIN, OUTPUT);
-
   pinA = setupPin(M_A);
   pinB = setupPin(M_B);
   pinC = setupPin(M_C);
@@ -130,7 +126,6 @@ static uint16_t get_random_bit(void) {
 	return rand_bit;
 }
 
-// the loop function runs over and over again forever
 void loop() {
 #ifdef CLONE_PANEL
   for (int8_t row = NUM_ROWS - 1; row >= 0; --row) {
@@ -173,11 +168,11 @@ void writeRows() {
   SET_LOW(pinSTR);
   
   for (int8_t cm5panel = NUM_PANELS - 1; cm5panel >= 0; --cm5panel) {
-    for (int8_t cm5row = 0; cm5row < NUM_ROWS; ++cm5row) { // 32 pixels per matrix panel row
-      uint8_t cm5dataRow = (cm5panel << 5) | cm5row;
+    uint8_t cm5panelorigin = cm5panel << 5;
 
+    for (int8_t cm5row = 0; cm5row < NUM_ROWS; ++cm5row) { // 32 pixels per matrix panel row
       SET_LOW(pinSCK);
-      if (rows[cm5dataRow] & (1 << cm5column)) SET_HIGH(pinR); else SET_LOW(pinR);
+      if (rows[cm5panelorigin | cm5row] & (1 << cm5column)) SET_HIGH(pinR); else SET_LOW(pinR);
       SET_HIGH(pinSCK);
     }
   }
