@@ -1,6 +1,7 @@
 #include <Arduino.h>
 #include <assert.h>
 
+#define MODE 7
 #define CLONE_PANEL
 
 #define M_A 2
@@ -89,10 +90,11 @@ void setup() {
   SET_LOW(pinSTR);
   SET_LOW(pinSCK);
 
+  // 16000000 hz / 128 / 16 / 65 = 120,19 Hz
   TCCR2A = 1 << WGM21; // CTC
-  TCCR2B = 1 << CS22; // Clock / 64
+  TCCR2B = 1 << CS22 | 1 << CS20; // Clock / 128
   TCNT2  = 0; // Clear counter
-  OCR2A = 255; // Compare value
+  OCR2A = 64; // Compare value
   TIMSK2 = 1 << OCIE2A; // TIMER2_COMPA_vect
 
   /* Initial state: all but 3 LEDs lit */
@@ -127,7 +129,48 @@ static uint16_t get_random_bit(void) {
 }
 
 void loop() {
-#ifdef CLONE_PANEL
+
+#if MODE == 5
+  #ifdef CLONE_PANEL
+  for (uint8_t row = 0; row < (NUM_ROWS >> 1); row++) {
+    for (uint8_t column = 0; column < 16; column++)
+    {
+      uint16_t bit_lower = get_random_bit();
+      uint16_t bit_upper = get_random_bit();
+
+      for (uint8_t panel = 0; panel < NUM_PANELS; ++panel) {
+        uint8_t cm5dataRow = (panel << 5) | row;
+
+        rows[cm5dataRow] <<= 1;
+        rows[cm5dataRow] |= bit_upper;
+
+        rows[cm5dataRow + (NUM_ROWS >> 1)] <<= 1;
+        rows[cm5dataRow + (NUM_ROWS >> 1)] |= bit_lower;
+      }
+    }
+  }
+  #else
+  for (uint8_t panel = 0; panel < NUM_PANELS; ++panel) {
+    for (uint8_t row = 0; row < (NUM_ROWS >> 1); row++) {
+      for (uint8_t column = 0; column < 16; column++)
+      {
+        uint16_t bit_lower = get_random_bit();
+        uint16_t bit_upper = get_random_bit();
+
+        uint8_t cm5dataRow = (panel << 5) | row;
+
+        rows[cm5dataRow] <<= 1;
+        rows[cm5dataRow] |= bit_upper;
+
+        rows[cm5dataRow + (NUM_ROWS >> 1)] <<= 1;
+        rows[cm5dataRow + (NUM_ROWS >> 1)] |= bit_lower;
+      }
+    }
+  }
+  #endif
+
+#elif MODE == 7
+  #ifdef CLONE_PANEL
   for (int8_t row = NUM_ROWS - 1; row >= 0; --row) {
     uint16_t bit = get_random_bit();
 
@@ -140,7 +183,7 @@ void loop() {
         rows[cm5dataRow] = (rows[cm5dataRow] << 1) | bit;
     }
   }
-#else
+  #else
   for (int8_t row = (NUM_ROWS * NUM_PANELS) - 1; row >= 0; --row) {
     uint16_t bit = get_random_bit();
 
@@ -149,6 +192,7 @@ void loop() {
     else
       rows[row] = (rows[row] << 1) | bit;
   }
+  #endif
 #endif
 
   _delay_ms(200);
