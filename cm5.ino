@@ -1,6 +1,8 @@
 #include <Arduino.h>
 #include <assert.h>
 
+#define CLONE_PANEL
+
 #define M_A 2
 #define M_B 3
 #define M_C 4
@@ -43,7 +45,8 @@ pin pinA, pinB, pinC, pinD, pinR, pinOE, pinSTR, pinSCK;
 
 #pragma region CM5 screen
 
-#define NUM_ROWS 32		/* unique rows */
+#define NUM_PANELS 3
+#define NUM_ROWS 32 	/* unique rows */
 #define NUM_ROWS_DISPLAYED 106	/* total rows in front panel display */
 
 #define RNUM_SEED 0xBAD  /* :-) */
@@ -60,7 +63,7 @@ PROGMEM const uint16_t rows_glitch[NUM_ROWS] = {
 /* Note: rows[0] is the top row; most significant bit is at left;
  * a zero bit corresponds to a lit LED
  */
-uint16_t rows[NUM_ROWS];
+uint16_t rows[NUM_ROWS * NUM_PANELS];
 
 uint16_t rnum = RNUM_SEED;
 
@@ -98,12 +101,20 @@ void setup() {
 
   /* Initial state: all but 3 LEDs lit */
   memset(rows, 0, sizeof(rows));
+
+#ifdef CLONE_PANEL
+  for (uint8_t panel = 0; panel < NUM_PANELS; ++panel)
+    rows[panel << 5] = 0x9400;
+#else
 	rows[0] = 0x9400;
+#endif
 
   _delay_ms(600);
 
-  /* Initialize rows with glitch pattern */
-	memcpy(rows, pgm_read_byte(rows_glitch), sizeof(rows));
+  for (uint8_t panel = 0; panel < NUM_PANELS; ++panel) {
+    /* Initialize rows with glitch pattern */
+    memcpy_P(rows + (panel << 5), rows_glitch, sizeof(rows_glitch));
+  }
 }
 
 static uint16_t get_random_bit(void) {
@@ -121,7 +132,21 @@ static uint16_t get_random_bit(void) {
 
 // the loop function runs over and over again forever
 void loop() {
+#ifdef CLONE_PANEL
   for (int8_t row = NUM_ROWS - 1; row >= 0; --row) {
+    uint16_t bit = get_random_bit();
+
+    for (uint8_t panel = 0; panel < NUM_PANELS; ++panel) {
+      uint8_t cm5dataRow = (panel << 5) | row;
+
+      if (cm5dataRow & 4) // Shift in groups of four rows
+        rows[cm5dataRow] = (bit << 15) | (rows[cm5dataRow] >> 1);
+      else
+        rows[cm5dataRow] = (rows[cm5dataRow] << 1) | bit;
+    }
+  }
+#else
+  for (int8_t row = (NUM_ROWS * NUM_PANELS) - 1; row >= 0; --row) {
     uint16_t bit = get_random_bit();
 
     if (row & 4) // Shift in groups of four rows
@@ -129,6 +154,7 @@ void loop() {
     else
       rows[row] = (rows[row] << 1) | bit;
   }
+#endif
 
   _delay_ms(200);
 }
@@ -145,11 +171,15 @@ void writeRows() {
 
   SET_HIGH(pinOE);
   SET_LOW(pinSTR);
+  
+  for (int8_t cm5panel = NUM_PANELS - 1; cm5panel >= 0; --cm5panel) {
+    for (int8_t cm5row = 0; cm5row < NUM_ROWS; ++cm5row) { // 32 pixels per matrix panel row
+      uint8_t cm5dataRow = (cm5panel << 5) | cm5row;
 
-  for (uint8_t cm5row = 0; cm5row < NUM_ROWS; ++cm5row) { // 32 pixels per matrix panel row
-    SET_LOW(pinSCK);
-    if (rows[cm5row] & (1 << cm5column)) SET_HIGH(pinR); else SET_LOW(pinR);
-    SET_HIGH(pinSCK);
+      SET_LOW(pinSCK);
+      if (rows[cm5dataRow] & (1 << cm5column)) SET_HIGH(pinR); else SET_LOW(pinR);
+      SET_HIGH(pinSCK);
+    }
   }
 
   if (ledRow & 0x01) SET_HIGH(pinA); else SET_LOW(pinA);
