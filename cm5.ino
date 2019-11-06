@@ -1,7 +1,9 @@
 #include <Arduino.h>
 #include <assert.h>
 
-#define MODE 7
+#include <wiring_private.h>
+static void turnOffPWM(uint8_t timer);
+
 #define CLONE_PANEL
 
 #define M_A 2
@@ -15,34 +17,53 @@
 #define M_STR 8
 #define M_SCK 9
 
+#define MODE_BUTTON 10
+
 #pragma region pin struct
 struct pin {
   volatile uint8_t *out;
+  volatile uint8_t *in;
   uint8_t bit;
 };
 
 #define SET_HIGH(p) ((*p.out) |= (p.bit))
 #define SET_LOW(p) ((*p.out) &= (~p.bit))
+#define IS_HIGH(p)  ((*p.in) & p.bit ? true : false)
+#define IS_LOW(p)  ((*p.in) & p.bit ? false : true)
 
-pin setupPin (uint8_t pinNumber) {
+pin setupPin (uint8_t pinNumber, uint8_t pinMode = OUTPUT) {
+  uint8_t timer = digitalPinToTimer(pinNumber);
+  if (timer != NOT_ON_TIMER) turnOffPWM(timer);
+
   uint8_t port = digitalPinToPort(pinNumber);
   assert(port != NOT_A_PIN);
 
   uint8_t bit = digitalPinToBitMask(pinNumber);
   
   volatile uint8_t *out = portOutputRegister(port);
+  volatile uint8_t *in = portInputRegister(port);
   volatile uint8_t *reg = portModeRegister(port);
 
-  *reg |= bit;  // Set as output
+  if (pinMode == INPUT) {
+    *reg &= ~bit;
+		*out &= ~bit;
+  } else if(pinMode == INPUT_PULLUP) {
+    *reg &= ~bit;
+		*out |= bit;
+  } else { // Set as output
+    *reg |= bit;
+  }
 
   return (pin){
     .out = out,
+    .in = in,
     .bit = bit
   };
 }
 #pragma endregion
 
 pin pinA, pinB, pinC, pinD, pinR, pinOE, pinSTR, pinSCK;
+pin pinBtn;
 
 #pragma region CM5 screen
 
@@ -55,10 +76,10 @@ pin pinA, pinB, pinC, pinD, pinR, pinOE, pinSTR, pinSCK;
 /* Uninitialized bits, displayed briefly at the start of mode 7
  */
 PROGMEM const uint16_t rows_glitch[NUM_ROWS] = {
-	0x8F10, 0x9112, 0x9314, 0x9516, 0x18E9, 0x5899, 0x38D9, 0x78B9,
-	0x9F20, 0xA122, 0xA324, 0xA526, 0x14E5, 0x5495, 0x34D5, 0x74B5,
-	0xAF30, 0xB132, 0xB334, 0xB536, 0x1CED, 0x5C9D, 0x3CDD, 0x7CBD,
-	0xBF40, 0xC142, 0xC344, 0xC546, 0x12E3, 0x5293, 0x32D3, 0x72B3
+  0x8F10, 0x9112, 0x9314, 0x9516, 0x18E9, 0x5899, 0x38D9, 0x78B9,
+  0x9F20, 0xA122, 0xA324, 0xA526, 0x14E5, 0x5495, 0x34D5, 0x74B5,
+  0xAF30, 0xB132, 0xB334, 0xB536, 0x1CED, 0x5C9D, 0x3CDD, 0x7CBD,
+  0xBF40, 0xC142, 0xC344, 0xC546, 0x12E3, 0x5293, 0x32D3, 0x72B3
 };
 
 /* Note: rows[0] is the top row; most significant bit is at left;
@@ -70,6 +91,8 @@ uint16_t rnum = RNUM_SEED;
 
 #pragma endregion
 
+uint8_t mode = 7;
+
 // the setup function runs once when you press reset or power the board
 void setup() {
   pinA = setupPin(M_A);
@@ -80,6 +103,8 @@ void setup() {
   pinOE = setupPin(M_OE);
   pinSTR = setupPin(M_STR);
   pinSCK = setupPin(M_SCK);
+
+  pinBtn = setupPin(MODE_BUTTON, INPUT_PULLUP);
 
   SET_LOW(pinA);
   SET_LOW(pinB);
@@ -97,6 +122,23 @@ void setup() {
   OCR2A = 64; // Compare value
   TIMSK2 = 1 << OCIE2A; // TIMER2_COMPA_vect
 
+  reset();
+}
+
+static uint16_t get_random_bit(void) {
+  /* https://en.wikipedia.org/wiki/Linear_feedback_shift_register
+   * Primitive polynomial: x^16 + x^15 + x^13 + x^4 + 1
+   */
+  uint16_t lfsr_bit = ((rnum >> 0) ^ (rnum >> 1) ^ (rnum >> 3) ^ (rnum >> 12)) & 1;
+
+  uint16_t rand_bit = (rnum | (rnum >> 2)) & 1;
+
+  rnum = (lfsr_bit << 15) | (rnum >> 1);
+  
+  return rand_bit;
+}
+
+void reset() {
   /* Initial state: all but 3 LEDs lit */
   memset(rows, 0, sizeof(rows));
 
@@ -104,7 +146,7 @@ void setup() {
   for (uint8_t panel = 0; panel < NUM_PANELS; ++panel)
     rows[panel << 5] = 0x9400;
 #else
-	rows[0] = 0x9400;
+  rows[0] = 0x9400;
 #endif
 
   _delay_ms(600);
@@ -115,85 +157,75 @@ void setup() {
   }
 }
 
-static uint16_t get_random_bit(void) {
-	/* https://en.wikipedia.org/wiki/Linear_feedback_shift_register
-	 * Primitive polynomial: x^16 + x^15 + x^13 + x^4 + 1
-	 */
-	uint16_t lfsr_bit = ((rnum >> 0) ^ (rnum >> 1) ^ (rnum >> 3) ^ (rnum >> 12)) & 1;
-
-	uint16_t rand_bit = (rnum | (rnum >> 2)) & 1;
-
-	rnum = (lfsr_bit << 15) | (rnum >> 1);
-  
-	return rand_bit;
-}
-
 void loop() {
-
-#if MODE == 5
-  #ifdef CLONE_PANEL
-  for (uint8_t row = 0; row < (NUM_ROWS >> 1); row++) {
-    for (uint8_t column = 0; column < 16; column++)
-    {
-      uint16_t bit_lower = get_random_bit();
-      uint16_t bit_upper = get_random_bit();
-
-      for (uint8_t panel = 0; panel < NUM_PANELS; ++panel) {
-        uint8_t cm5dataRow = (panel << 5) | row;
-
-        rows[cm5dataRow] <<= 1;
-        rows[cm5dataRow] |= bit_upper;
-
-        rows[cm5dataRow + (NUM_ROWS >> 1)] <<= 1;
-        rows[cm5dataRow + (NUM_ROWS >> 1)] |= bit_lower;
-      }
-    }
+  if (IS_LOW(pinBtn)) {
+    mode = mode == 7 ? 5 : 7;
+    return reset();
   }
-  #else
-  for (uint8_t panel = 0; panel < NUM_PANELS; ++panel) {
+
+  if(mode == 5) {
+  #ifdef CLONE_PANEL
     for (uint8_t row = 0; row < (NUM_ROWS >> 1); row++) {
       for (uint8_t column = 0; column < 16; column++)
       {
         uint16_t bit_lower = get_random_bit();
         uint16_t bit_upper = get_random_bit();
 
-        uint8_t cm5dataRow = (panel << 5) | row;
+        for (uint8_t panel = 0; panel < NUM_PANELS; ++panel) {
+          uint8_t cm5dataRow = (panel << 5) | row;
 
-        rows[cm5dataRow] <<= 1;
-        rows[cm5dataRow] |= bit_upper;
+          rows[cm5dataRow] <<= 1;
+          rows[cm5dataRow] |= bit_upper;
 
-        rows[cm5dataRow + (NUM_ROWS >> 1)] <<= 1;
-        rows[cm5dataRow + (NUM_ROWS >> 1)] |= bit_lower;
+          rows[cm5dataRow + (NUM_ROWS >> 1)] <<= 1;
+          rows[cm5dataRow + (NUM_ROWS >> 1)] |= bit_lower;
+        }
       }
     }
-  }
-  #endif
-
-#elif MODE == 7
-  #ifdef CLONE_PANEL
-  for (int8_t row = NUM_ROWS - 1; row >= 0; --row) {
-    uint16_t bit = get_random_bit();
-
-    for (uint8_t panel = 0; panel < NUM_PANELS; ++panel) {
-      uint8_t cm5dataRow = (panel << 5) | row;
-
-      if (cm5dataRow & 4) // Shift in groups of four rows
-        rows[cm5dataRow] = (bit << 15) | (rows[cm5dataRow] >> 1);
-      else
-        rows[cm5dataRow] = (rows[cm5dataRow] << 1) | bit;
-    }
-  }
   #else
-  for (int8_t row = (NUM_ROWS * NUM_PANELS) - 1; row >= 0; --row) {
-    uint16_t bit = get_random_bit();
+    for (uint8_t panel = 0; panel < NUM_PANELS; ++panel) {
+      for (uint8_t row = 0; row < (NUM_ROWS >> 1); row++) {
+        for (uint8_t column = 0; column < 16; column++)
+        {
+          uint16_t bit_lower = get_random_bit();
+          uint16_t bit_upper = get_random_bit();
 
-    if (row & 4) // Shift in groups of four rows
-      rows[row] = (bit << 15) | (rows[row] >> 1);
-    else
-      rows[row] = (rows[row] << 1) | bit;
-  }
+          uint8_t cm5dataRow = (panel << 5) | row;
+
+          rows[cm5dataRow] <<= 1;
+          rows[cm5dataRow] |= bit_upper;
+
+          rows[cm5dataRow + (NUM_ROWS >> 1)] <<= 1;
+          rows[cm5dataRow + (NUM_ROWS >> 1)] |= bit_lower;
+        }
+      }
+    }
   #endif
-#endif
+  } else {
+  #ifdef CLONE_PANEL
+    for (int8_t row = NUM_ROWS - 1; row >= 0; --row) {
+      uint16_t bit = get_random_bit();
+
+      for (uint8_t panel = 0; panel < NUM_PANELS; ++panel) {
+        uint8_t cm5dataRow = (panel << 5) | row;
+
+        if (cm5dataRow & 4) // Shift in groups of four rows
+          rows[cm5dataRow] = (bit << 15) | (rows[cm5dataRow] >> 1);
+        else
+          rows[cm5dataRow] = (rows[cm5dataRow] << 1) | bit;
+      }
+    }
+  #else
+    for (int8_t row = (NUM_ROWS * NUM_PANELS) - 1; row >= 0; --row) {
+      uint16_t bit = get_random_bit();
+
+      if (row & 4) // Shift in groups of four rows
+        rows[row] = (bit << 15) | (rows[row] >> 1);
+      else
+        rows[row] = (rows[row] << 1) | bit;
+    }
+  #endif
+  }
 
   _delay_ms(200);
 }
@@ -235,4 +267,67 @@ void writeRows() {
 ISR(TIMER2_COMPA_vect)
 {
   writeRows();
+}
+
+static void turnOffPWM(uint8_t timer)
+{
+	switch (timer)
+	{
+		#if defined(TCCR1A) && defined(COM1A1)
+		case TIMER1A:   cbi(TCCR1A, COM1A1);    break;
+		#endif
+		#if defined(TCCR1A) && defined(COM1B1)
+		case TIMER1B:   cbi(TCCR1A, COM1B1);    break;
+		#endif
+		#if defined(TCCR1A) && defined(COM1C1)
+		case TIMER1C:   cbi(TCCR1A, COM1C1);    break;
+		#endif
+		
+		#if defined(TCCR2) && defined(COM21)
+		case  TIMER2:   cbi(TCCR2, COM21);      break;
+		#endif
+		
+		#if defined(TCCR0A) && defined(COM0A1)
+		case  TIMER0A:  cbi(TCCR0A, COM0A1);    break;
+		#endif
+		
+		#if defined(TCCR0A) && defined(COM0B1)
+		case  TIMER0B:  cbi(TCCR0A, COM0B1);    break;
+		#endif
+		#if defined(TCCR2A) && defined(COM2A1)
+		case  TIMER2A:  cbi(TCCR2A, COM2A1);    break;
+		#endif
+		#if defined(TCCR2A) && defined(COM2B1)
+		case  TIMER2B:  cbi(TCCR2A, COM2B1);    break;
+		#endif
+		
+		#if defined(TCCR3A) && defined(COM3A1)
+		case  TIMER3A:  cbi(TCCR3A, COM3A1);    break;
+		#endif
+		#if defined(TCCR3A) && defined(COM3B1)
+		case  TIMER3B:  cbi(TCCR3A, COM3B1);    break;
+		#endif
+		#if defined(TCCR3A) && defined(COM3C1)
+		case  TIMER3C:  cbi(TCCR3A, COM3C1);    break;
+		#endif
+
+		#if defined(TCCR4A) && defined(COM4A1)
+		case  TIMER4A:  cbi(TCCR4A, COM4A1);    break;
+		#endif					
+		#if defined(TCCR4A) && defined(COM4B1)
+		case  TIMER4B:  cbi(TCCR4A, COM4B1);    break;
+		#endif
+		#if defined(TCCR4A) && defined(COM4C1)
+		case  TIMER4C:  cbi(TCCR4A, COM4C1);    break;
+		#endif			
+		#if defined(TCCR4C) && defined(COM4D1)
+		case TIMER4D:	cbi(TCCR4C, COM4D1);	break;
+		#endif			
+			
+		#if defined(TCCR5A)
+		case  TIMER5A:  cbi(TCCR5A, COM5A1);    break;
+		case  TIMER5B:  cbi(TCCR5A, COM5B1);    break;
+		case  TIMER5C:  cbi(TCCR5A, COM5C1);    break;
+		#endif
+	}
 }
