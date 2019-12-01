@@ -203,20 +203,24 @@ void writeRows() {
   SET_HIGH(pinOE);
   SET_LOW(pinSTR);
   
+  uint16_t columnMask = 1 << cm5column;
+  uint8_t cm5panelorigin = 0;
   for (int8_t cm5panel = NUM_PANELS - 1; cm5panel >= 0; --cm5panel) {
-    uint8_t cm5panelorigin = cm5panel << 5;
+    #ifndef CLONE_PANEL
+      cm5panelorigin = cm5panel * NUM_ROWS;
+    #endif
 
     for (int8_t cm5row = 0; cm5row < NUM_ROWS; ++cm5row) { // 32 pixels per matrix panel row
       SET_LOW(pinSCK);
-      if (rows[cm5panelorigin | cm5row] & (1 << cm5column)) SET_HIGH(pinR); else SET_LOW(pinR);
+      SET_TO(pinR, (rows[cm5panelorigin | cm5row] & columnMask) != 0);
       SET_HIGH(pinSCK);
     }
   }
 
-  if (ledRow & 0x01) SET_HIGH(pinA); else SET_LOW(pinA);
-  if (ledRow & 0x02) SET_HIGH(pinB); else SET_LOW(pinB);
-  if (ledRow & 0x04) SET_HIGH(pinC); else SET_LOW(pinC);
-  if (ledRow & 0x08) SET_HIGH(pinD); else SET_LOW(pinD);
+  SET_TO(pinA, (ledRow & 0x01) != 0);
+  SET_TO(pinB, (ledRow & 0x02) != 0);
+  SET_TO(pinC, (ledRow & 0x04) != 0);
+  SET_TO(pinD, (ledRow & 0x08) != 0);
   
   SET_HIGH(pinSTR);
   SET_LOW(pinOE);
