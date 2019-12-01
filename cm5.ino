@@ -26,10 +26,11 @@ struct pin {
   uint8_t bit;
 };
 
-#define SET_HIGH(p) ((*p.out) |= (p.bit))
-#define SET_LOW(p) ((*p.out) &= (~p.bit))
-#define IS_HIGH(p)  ((*p.in) & p.bit ? true : false)
-#define IS_LOW(p)  ((*p.in) & p.bit ? false : true)
+#define SET_TO(p, x) (*p.out ^= (-(x) ^ *p.out) & p.bit)
+#define SET_HIGH(p) (*p.out |= p.bit)
+#define SET_LOW(p) (*p.out &= ~p.bit)
+#define IS_HIGH(p)  ((*p.in & p.bit) ? true : false)
+#define IS_LOW(p)  ((*p.in & p.bit) ? false : true)
 
 pin setupPin (uint8_t pinNumber, uint8_t pinMode = OUTPUT) {
   uint8_t timer = digitalPinToTimer(pinNumber);
@@ -71,11 +72,17 @@ pin pinBtn;
 #define NUM_ROWS 32 	/* unique rows */
 #define NUM_ROWS_DISPLAYED 106	/* total rows in front panel display */
 
+#ifdef CLONE_PANEL
+  #define NUM_DATA_ROWS NUM_ROWS
+#else
+  #define NUM_DATA_ROWS NUM_PANELS * NUM_ROWS
+#endif
+
 #define RNUM_SEED 0xBAD  /* :-) */
 
 /* Uninitialized bits, displayed briefly at the start of mode 7
  */
-PROGMEM const uint16_t rows_glitch[NUM_ROWS] = {
+PROGMEM const uint16_t rows_glitch[] = {
   0x8F10, 0x9112, 0x9314, 0x9516, 0x18E9, 0x5899, 0x38D9, 0x78B9,
   0x9F20, 0xA122, 0xA324, 0xA526, 0x14E5, 0x5495, 0x34D5, 0x74B5,
   0xAF30, 0xB132, 0xB334, 0xB536, 0x1CED, 0x5C9D, 0x3CDD, 0x7CBD,
@@ -85,7 +92,7 @@ PROGMEM const uint16_t rows_glitch[NUM_ROWS] = {
 /* Note: rows[0] is the top row; most significant bit is at left;
  * a zero bit corresponds to a lit LED
  */
-uint16_t rows[NUM_ROWS * NUM_PANELS];
+uint16_t rows[NUM_DATA_ROWS];
 
 uint16_t rnum = RNUM_SEED;
 
@@ -139,22 +146,17 @@ static uint16_t get_random_bit(void) {
 }
 
 void reset() {
+  #define VIRTUAL_PANEL_COUNT (NUM_DATA_ROWS / NUM_ROWS)
+
   /* Initial state: all but 3 LEDs lit */
   memset(rows, 0, sizeof(rows));
-
-#ifdef CLONE_PANEL
-  for (uint8_t panel = 0; panel < NUM_PANELS; ++panel)
-    rows[panel << 5] = 0x9400;
-#else
-  rows[0] = 0x9400;
-#endif
+  for (uint8_t panel = 0; panel < VIRTUAL_PANEL_COUNT; ++panel)
+    rows[panel * NUM_ROWS] = 0x9400;
 
   _delay_ms(600);
 
-  for (uint8_t panel = 0; panel < NUM_PANELS; ++panel) {
-    /* Initialize rows with glitch pattern */
-    memcpy_P(rows + (panel << 5), rows_glitch, sizeof(rows_glitch));
-  }
+  for (uint8_t panel = 0; panel < VIRTUAL_PANEL_COUNT; ++panel)
+    memcpy_P(rows + (panel * NUM_ROWS), rows_glitch, sizeof(rows_glitch)); // Initialize rows with glitch pattern
 }
 
 void loop() {
@@ -164,59 +166,18 @@ void loop() {
   }
 
   if(mode == 5) {
-  #ifdef CLONE_PANEL
-    for (uint8_t row = 0; row < (NUM_ROWS >> 1); row++) {
+    for (uint8_t row = 0; row < (NUM_DATA_ROWS >> 1); row++) {
       for (uint8_t column = 0; column < 16; column++)
       {
         uint16_t bit_lower = get_random_bit();
         uint16_t bit_upper = get_random_bit();
 
-        for (uint8_t panel = 0; panel < NUM_PANELS; ++panel) {
-          uint8_t cm5dataRow = (panel << 5) | row;
-
-          rows[cm5dataRow] <<= 1;
-          rows[cm5dataRow] |= bit_upper;
-
-          rows[cm5dataRow + (NUM_ROWS >> 1)] <<= 1;
-          rows[cm5dataRow + (NUM_ROWS >> 1)] |= bit_lower;
-        }
+        rows[row] = rows[row + (NUM_DATA_ROWS >> 1)] <<= 1;
+        rows[row] = rows[row + (NUM_DATA_ROWS >> 1)] |= bit_lower;
       }
     }
-  #else
-    for (uint8_t panel = 0; panel < NUM_PANELS; ++panel) {
-      for (uint8_t row = 0; row < (NUM_ROWS >> 1); row++) {
-        for (uint8_t column = 0; column < 16; column++)
-        {
-          uint16_t bit_lower = get_random_bit();
-          uint16_t bit_upper = get_random_bit();
-
-          uint8_t cm5dataRow = (panel << 5) | row;
-
-          rows[cm5dataRow] <<= 1;
-          rows[cm5dataRow] |= bit_upper;
-
-          rows[cm5dataRow + (NUM_ROWS >> 1)] <<= 1;
-          rows[cm5dataRow + (NUM_ROWS >> 1)] |= bit_lower;
-        }
-      }
-    }
-  #endif
   } else {
-  #ifdef CLONE_PANEL
-    for (int8_t row = NUM_ROWS - 1; row >= 0; --row) {
-      uint16_t bit = get_random_bit();
-
-      for (uint8_t panel = 0; panel < NUM_PANELS; ++panel) {
-        uint8_t cm5dataRow = (panel << 5) | row;
-
-        if (cm5dataRow & 4) // Shift in groups of four rows
-          rows[cm5dataRow] = (bit << 15) | (rows[cm5dataRow] >> 1);
-        else
-          rows[cm5dataRow] = (rows[cm5dataRow] << 1) | bit;
-      }
-    }
-  #else
-    for (int8_t row = (NUM_ROWS * NUM_PANELS) - 1; row >= 0; --row) {
+    for (int8_t row = NUM_DATA_ROWS - 1; row >= 0; --row) {
       uint16_t bit = get_random_bit();
 
       if (row & 4) // Shift in groups of four rows
@@ -224,7 +185,6 @@ void loop() {
       else
         rows[row] = (rows[row] << 1) | bit;
     }
-  #endif
   }
 
   _delay_ms(200);
