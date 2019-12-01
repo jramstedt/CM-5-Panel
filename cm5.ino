@@ -55,15 +55,22 @@ pin pinRtcInt;
 
 #define VIRTUAL_PANEL_COUNT (NUM_DATA_ROWS / NUM_ROWS)
 
-#define RNUM_SEED 0xBAD /* :-) */
+#ifdef CLONE_PANEL
+  #define NUM_DATA_ROWS NUM_ROWS
+#else
+  #define NUM_DATA_ROWS NUM_PANELS * NUM_ROWS
+#endif
+
+#define RNUM_SEED 0xBAD  /* :-) */
 
 /* Uninitialized bits, displayed briefly at the start of mode 7
  */
 PROGMEM const uint16_t rows_glitch[] = {
-    0x8F10, 0x9112, 0x9314, 0x9516, 0x18E9, 0x5899, 0x38D9, 0x78B9,
-    0x9F20, 0xA122, 0xA324, 0xA526, 0x14E5, 0x5495, 0x34D5, 0x74B5,
-    0xAF30, 0xB132, 0xB334, 0xB536, 0x1CED, 0x5C9D, 0x3CDD, 0x7CBD,
-    0xBF40, 0xC142, 0xC344, 0xC546, 0x12E3, 0x5293, 0x32D3, 0x72B3};
+  0x8F10, 0x9112, 0x9314, 0x9516, 0x18E9, 0x5899, 0x38D9, 0x78B9,
+  0x9F20, 0xA122, 0xA324, 0xA526, 0x14E5, 0x5495, 0x34D5, 0x74B5,
+  0xAF30, 0xB132, 0xB334, 0xB536, 0x1CED, 0x5C9D, 0x3CDD, 0x7CBD,
+  0xBF40, 0xC142, 0xC344, 0xC546, 0x12E3, 0x5293, 0x32D3, 0x72B3
+};
 
 /* Note: rows[0] is the top row; most significant bit is at left;
  * a zero bit corresponds to a lit LED
@@ -198,6 +205,8 @@ static uint16_t get_random_bit_galois(void) {
 }
 
 void reset() {
+  #define VIRTUAL_PANEL_COUNT (NUM_DATA_ROWS / NUM_ROWS)
+
   /* Initial state: all but 3 LEDs lit */
   memset(rows, 0, sizeof(rows));
   for (uint8_t panel = 0; panel < VIRTUAL_PANEL_COUNT; ++panel)
