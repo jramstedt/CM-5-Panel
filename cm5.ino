@@ -6,18 +6,25 @@ static void turnOffPWM(uint8_t timer);
 
 #define CLONE_PANEL
 
-#define M_A 2
-#define M_B 3
-#define M_C 4
-#define M_D 5
+#define M_D0 A0
+#define M_D1 A1
+#define M_D2 A2
+#define M_D3 A3
+#define M_D4 A4
+#define M_D5 A5
+#define M_D6 0
+#define M_D7 1
 
-#define M_R 6
+#define M_CLK 2
+#define M_STR 3
+#define M_OE0 5
+#define M_OE1 4
 
-#define M_OE 7
-#define M_STR 8
-#define M_SCK 9
+#define M_A0 10
+#define M_A1 11
+#define M_A2 12
 
-#define MODE_BUTTON 10
+#define MODE_BUTTON 13
 
 #pragma region pin struct
 struct pin {
@@ -63,13 +70,14 @@ pin setupPin (uint8_t pinNumber, uint8_t pinMode = OUTPUT) {
 }
 #pragma endregion
 
-pin pinA, pinB, pinC, pinD, pinR, pinOE, pinSTR, pinSCK;
+pin pinD0, pinD1, pinD2, pinD3, pinD4, pinD5, pinD6, pinD7;
+pin pinCLK, pinSTR, pinOE0, pinOE1, pinA0, pinA1, pinA2;
 pin pinBtn;
 
 #pragma region CM5 screen
 
-#define NUM_PANELS 3
-#define NUM_ROWS 32 	/* unique rows */
+#define NUM_PANELS 2
+#define NUM_ROWS 56 	/* unique rows in panel */
 #define NUM_ROWS_DISPLAYED 106	/* total rows in front panel display */
 
 #ifdef CLONE_PANEL
@@ -102,25 +110,43 @@ uint8_t mode = 7;
 
 // the setup function runs once when you press reset or power the board
 void setup() {
-  pinA = setupPin(M_A);
-  pinB = setupPin(M_B);
-  pinC = setupPin(M_C);
-  pinD = setupPin(M_D);
-  pinR = setupPin(M_R);
-  pinOE = setupPin(M_OE);
+  pinD0 = setupPin(M_D0);
+  pinD1 = setupPin(M_D1);
+  pinD2 = setupPin(M_D2);
+  pinD3 = setupPin(M_D3);
+  pinD4 = setupPin(M_D4);
+  pinD5 = setupPin(M_D5);
+  pinD6 = setupPin(M_D6);
+  pinD7 = setupPin(M_D7);
+  
+  pinCLK = setupPin(M_CLK);
   pinSTR = setupPin(M_STR);
-  pinSCK = setupPin(M_SCK);
-
+  pinOE0 = setupPin(M_OE0);
+  pinOE1 = setupPin(M_OE1);
+  pinA0 = setupPin(M_A0);
+  pinA1 = setupPin(M_A1);
+  pinA2 = setupPin(M_A2);
+  
   pinBtn = setupPin(MODE_BUTTON, INPUT_PULLUP);
+  
+  SET_LOW(pinD0);
+  SET_LOW(pinD1);
+  SET_LOW(pinD2);
+  SET_LOW(pinD3);
+  SET_LOW(pinD4);
+  SET_LOW(pinD5);
+  SET_LOW(pinD6);
+  SET_LOW(pinD7);
 
-  SET_LOW(pinA);
-  SET_LOW(pinB);
-  SET_LOW(pinC);
-  SET_LOW(pinD);
-  SET_HIGH(pinR);
-  SET_HIGH(pinOE);
-  SET_LOW(pinSTR);
-  SET_LOW(pinSCK);
+  SET_HIGH(pinCLK);
+  SET_HIGH(pinSTR);
+
+  SET_LOW(pinOE0);
+  SET_LOW(pinOE1);
+
+  SET_LOW(pinA0);
+  SET_LOW(pinA1);
+  SET_LOW(pinA2);
 
   // 16000000 hz / 128 / 16 / 65 = 120,19 Hz
   TCCR2A = 1 << WGM21; // CTC
@@ -200,26 +226,40 @@ void writeRows() {
 
   #define cm5column ledRow
 
-  SET_HIGH(pinOE);
-  SET_LOW(pinSTR);
-  
-  for (int8_t cm5panel = NUM_PANELS - 1; cm5panel >= 0; --cm5panel) {
-    uint8_t cm5panelorigin = cm5panel << 5;
+  SET_LOW(pinOE0);
+  SET_LOW(pinOE1);
+  SET_HIGH(pinSTR);
 
-    for (int8_t cm5row = 0; cm5row < NUM_ROWS; ++cm5row) { // 32 pixels per matrix panel row
-      SET_LOW(pinSCK);
-      if (rows[cm5panelorigin | cm5row] & (1 << cm5column)) SET_HIGH(pinR); else SET_LOW(pinR);
-      SET_HIGH(pinSCK);
+  uint16_t columnMask = 1 << cm5column;
+  uint8_t cm5panelorigin = 0;
+  for (int8_t cm5panel = 0; cm5panel < NUM_PANELS; ++cm5panel) {
+#ifndef CLONE_PANEL
+    cm5panelorigin = cm5panel * NUM_ROWS;
+#endif
+
+    for (int8_t cm5row = 0; cm5row < (NUM_ROWS >> 3); ++cm5row) {
+      uint8_t roworigin = cm5panelorigin + (cm5row << 3);
+      SET_HIGH(pinCLK);
+
+      SET_TO(pinD0, !(rows[roworigin++] & columnMask));
+      SET_TO(pinD1, !(rows[roworigin++] & columnMask));
+      SET_TO(pinD2, !(rows[roworigin++] & columnMask));
+      SET_TO(pinD3, !(rows[roworigin++] & columnMask));
+      SET_TO(pinD4, !(rows[roworigin++] & columnMask));
+      SET_TO(pinD5, !(rows[roworigin++] & columnMask));
+      SET_TO(pinD6, !(rows[roworigin++] & columnMask));
+      SET_TO(pinD7, !(rows[roworigin] & columnMask));
+
+      SET_LOW(pinCLK);
     }
   }
 
-  if (ledRow & 0x01) SET_HIGH(pinA); else SET_LOW(pinA);
-  if (ledRow & 0x02) SET_HIGH(pinB); else SET_LOW(pinB);
-  if (ledRow & 0x04) SET_HIGH(pinC); else SET_LOW(pinC);
-  if (ledRow & 0x08) SET_HIGH(pinD); else SET_LOW(pinD);
-  
-  SET_HIGH(pinSTR);
-  SET_LOW(pinOE);
+  SET_TO(pinA0, (ledRow & 0x01) != 0);
+  SET_TO(pinA1, (ledRow & 0x02) != 0);
+  SET_TO(pinA2, (ledRow & 0x04) != 0);
+
+  SET_LOW(pinSTR);
+  if (ledRow & 0x08) SET_HIGH(pinOE1); else SET_HIGH(pinOE0);
 
   ledRow = ++ledRow & 0x0F;
 }
