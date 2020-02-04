@@ -1,6 +1,6 @@
 {
     "board": "arduino:avr:nano",
     "configuration": "cpu=atmega168",
-    "port": "COM4",
+    "port": "COM3",
     "sketch": "cm5.ino"
 }
