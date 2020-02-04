@@ -6,25 +6,25 @@ static void turnOffPWM(uint8_t timer);
 
 #define CLONE_PANEL
 
-#define M_D0 A0
-#define M_D1 A1
-#define M_D2 A2
-#define M_D3 A3
-#define M_D4 A4
-#define M_D5 A5
-#define M_D6 0
-#define M_D7 1
+#define M_D0 (2)
+#define M_D1 (3)
+#define M_D2 (4)
+#define M_D3 (5)
+#define M_D4 (6)
+#define M_D5 (7)
+#define M_D6 (8)
+#define M_D7 (9)
 
-#define M_CLK 2
-#define M_STR 3
-#define M_OE0 5
-#define M_OE1 4
+#define M_CLK A2
+#define M_STR A3
+#define M_OE0 A4
+#define M_OE1 A5
 
-#define M_A0 10
-#define M_A1 11
-#define M_A2 12
+#define M_A0 (12)
+#define M_A1 (11)
+#define M_A2 (10)
 
-#define MODE_BUTTON 13
+#define MODE_BUTTON A0
 
 #pragma region pin struct
 struct pin {
