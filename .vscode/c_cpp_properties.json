@@ -32,7 +32,8 @@
             "compilerPath": "${config:arduino.path}\\hardware\\tools\\avr\\bin\\avr-gcc.exe",
             "cStandard": "c11",
             "cppStandard": "c++17",
-            "intelliSenseMode": "gcc-x86"
+            "intelliSenseMode": "gcc-x86",
+            "compilerArgs": ["-mmcu=atmega168"]
         }
     ],
     "version": 4
