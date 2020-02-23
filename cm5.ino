@@ -163,6 +163,8 @@ void reset() {
 }
 
 void loop() {
+  unsigned long nextLoop = millis() + 200;
+
   if (IS_LOW(pinBtn)) {
     mode = mode == 7 ? 5 : 7;
     return reset();
@@ -190,7 +192,9 @@ void loop() {
     }
   }
 
-  _delay_ms(200);
+  while (millis() < nextLoop) {
+		yield();
+  }
 }
 
 /*
