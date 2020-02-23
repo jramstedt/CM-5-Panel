@@ -1,4 +1,4 @@
-#pragma GCC optimize ("O3")
+#pragma GCC optimize("O3")
 
 #include <Arduino.h>
 #include <assert.h>
@@ -31,10 +31,10 @@ struct pin {
 #define SET_TO(p, x) (*p.out ^= (-(x) ^ *p.out) & p.bit)
 #define SET_HIGH(p) (*p.out |= p.bit)
 #define SET_LOW(p) (*p.out &= ~p.bit)
-#define IS_HIGH(p)  ((*p.in & p.bit) ? true : false)
-#define IS_LOW(p)  ((*p.in & p.bit) ? false : true)
+#define IS_HIGH(p) ((*p.in & p.bit) ? true : false)
+#define IS_LOW(p) ((*p.in & p.bit) ? false : true)
 
-pin setupPin (uint8_t pinNumber, uint8_t pinMode = OUTPUT) {
+pin setupPin(uint8_t pinNumber, uint8_t pinMode = OUTPUT) {
   uint8_t timer = digitalPinToTimer(pinNumber);
   if (timer != NOT_ON_TIMER) turnOffPWM(timer);
 
@@ -42,7 +42,7 @@ pin setupPin (uint8_t pinNumber, uint8_t pinMode = OUTPUT) {
   assert(port != NOT_A_PIN);
 
   uint8_t bit = digitalPinToBitMask(pinNumber);
-  
+
   volatile uint8_t *out = portOutputRegister(port);
   volatile uint8_t *in = portInputRegister(port);
   volatile uint8_t *reg = portModeRegister(port);
@@ -50,17 +50,17 @@ pin setupPin (uint8_t pinNumber, uint8_t pinMode = OUTPUT) {
   if (pinMode == INPUT) {
     *reg &= ~bit;
     *out &= ~bit;
-  } else if(pinMode == INPUT_PULLUP) {
+  } else if (pinMode == INPUT_PULLUP) {
     *reg &= ~bit;
     *out |= bit;
   } else { // Set as output
     *reg |= bit;
   }
 
-  return (pin){
-    .out = out,
-    .in = in,
-    .bit = bit
+  return (pin) {
+      .out = out,
+      .in = in,
+      .bit = bit
   };
 }
 #pragma endregion
@@ -70,27 +70,26 @@ pin pinBtn;
 
 #pragma region CM5 screen
 
-#define NUM_ROWS 32 	/* unique rows */
-#define NUM_ROWS_DISPLAYED 106	/* total rows in front panel display */
+#define NUM_ROWS 32            /* unique rows */
+#define NUM_ROWS_DISPLAYED 106 /* total rows in front panel display */
 
 #ifdef CLONE_PANEL
-  #define NUM_PANELS 1
-  #define NUM_DATA_ROWS NUM_ROWS
+#define NUM_PANELS 1
+#define NUM_DATA_ROWS NUM_ROWS
 #else
-  #define NUM_PANELS 4
-  #define NUM_DATA_ROWS NUM_PANELS * NUM_ROWS
+#define NUM_PANELS 4
+#define NUM_DATA_ROWS NUM_PANELS *NUM_ROWS
 #endif
 
-#define RNUM_SEED 0xBAD  /* :-) */
+#define RNUM_SEED 0xBAD /* :-) */
 
 /* Uninitialized bits, displayed briefly at the start of mode 7
  */
 PROGMEM const uint16_t rows_glitch[] = {
-  0x8F10, 0x9112, 0x9314, 0x9516, 0x18E9, 0x5899, 0x38D9, 0x78B9,
-  0x9F20, 0xA122, 0xA324, 0xA526, 0x14E5, 0x5495, 0x34D5, 0x74B5,
-  0xAF30, 0xB132, 0xB334, 0xB536, 0x1CED, 0x5C9D, 0x3CDD, 0x7CBD,
-  0xBF40, 0xC142, 0xC344, 0xC546, 0x12E3, 0x5293, 0x32D3, 0x72B3
-};
+    0x8F10, 0x9112, 0x9314, 0x9516, 0x18E9, 0x5899, 0x38D9, 0x78B9,
+    0x9F20, 0xA122, 0xA324, 0xA526, 0x14E5, 0x5495, 0x34D5, 0x74B5,
+    0xAF30, 0xB132, 0xB334, 0xB536, 0x1CED, 0x5C9D, 0x3CDD, 0x7CBD,
+    0xBF40, 0xC142, 0xC344, 0xC546, 0x12E3, 0x5293, 0x32D3, 0x72B3};
 
 /* Note: rows[0] is the top row; most significant bit is at left;
  * a zero bit corresponds to a lit LED
@@ -126,11 +125,11 @@ void setup() {
   SET_LOW(pinSCK);
 
   // 16000000 hz / 1024 / 16 / 16 = 61,04 Hz
-  TCCR2A = 1 << WGM21; // CTC
+  TCCR2A = 1 << WGM21;                        // CTC
   TCCR2B = 1 << CS22 | 1 << CS21 | 1 << CS20; // Clock / 1023
-  TCNT2  = 0; // Clear counter
-  OCR2A = 16; // Compare value
-  TIMSK2 = 1 << OCIE2A; // TIMER2_COMPA_vect
+  TCNT2 = 0;                                  // Clear counter
+  OCR2A = 16;                                 // Compare value
+  TIMSK2 = 1 << OCIE2A;                       // TIMER2_COMPA_vect
 
   reset();
 }
@@ -144,12 +143,12 @@ static uint16_t get_random_bit(void) {
   uint16_t rand_bit = (rnum | (rnum >> 2)) & 1;
 
   rnum = (lfsr_bit << 15) | (rnum >> 1);
-  
+
   return rand_bit;
 }
 
 void reset() {
-  #define VIRTUAL_PANEL_COUNT (NUM_DATA_ROWS / NUM_ROWS)
+#define VIRTUAL_PANEL_COUNT (NUM_DATA_ROWS / NUM_ROWS)
 
   /* Initial state: all but 3 LEDs lit */
   memset(rows, 0, sizeof(rows));
@@ -170,10 +169,9 @@ void loop() {
     return reset();
   }
 
-  if(mode == 5) {
+  if (mode == 5) {
     for (uint8_t row = 0; row < (NUM_DATA_ROWS >> 1); row++) {
-      for (uint8_t column = 0; column < 16; column++)
-      {
+      for (uint8_t column = 0; column < 16; column++) {
         uint16_t bit_lower = get_random_bit();
         uint16_t bit_upper = get_random_bit();
 
@@ -192,30 +190,29 @@ void loop() {
     }
   }
 
-  while (millis() < nextLoop) {
-		yield();
-  }
+  while (millis() < nextLoop)
+    yield();
 }
 
 /*
  *  CM5 data is horizontal rows
  *  led panel is vertical rows
- */ 
+ */
 __attribute__((optimize("unroll-loops")))
 void writeRows() {
   static uint8_t ledRow;
 
-  #define cm5column ledRow
+#define cm5column ledRow
 
   SET_HIGH(pinOE);
   SET_LOW(pinSTR);
-  
+
   uint16_t columnMask = 1 << cm5column;
   uint8_t cm5panelorigin = 0;
   for (int8_t cm5panel = NUM_PANELS - 1; cm5panel >= 0; --cm5panel) {
-    #ifndef CLONE_PANEL
-      cm5panelorigin = cm5panel * NUM_ROWS;
-    #endif
+#ifndef CLONE_PANEL
+    cm5panelorigin = cm5panel * NUM_ROWS;
+#endif
 
     for (int8_t cm5row = 0; cm5row < NUM_ROWS; ++cm5row) { // 32 pixels per matrix panel row
       SET_LOW(pinSCK);
@@ -228,7 +225,7 @@ void writeRows() {
   SET_TO(pinB, (ledRow & 0x02) != 0);
   SET_TO(pinC, (ledRow & 0x04) != 0);
   SET_TO(pinD, (ledRow & 0x08) != 0);
-  
+
   SET_HIGH(pinSTR);
   SET_LOW(pinOE);
 
@@ -244,61 +241,97 @@ static void turnOffPWM(uint8_t timer)
 {
   switch (timer)
   {
-    #if defined(TCCR1A) && defined(COM1A1)
-    case TIMER1A:   cbi(TCCR1A, COM1A1);    break;
-    #endif
-    #if defined(TCCR1A) && defined(COM1B1)
-    case TIMER1B:   cbi(TCCR1A, COM1B1);    break;
-    #endif
-    #if defined(TCCR1A) && defined(COM1C1)
-    case TIMER1C:   cbi(TCCR1A, COM1C1);    break;
-    #endif
-    
-    #if defined(TCCR2) && defined(COM21)
-    case  TIMER2:   cbi(TCCR2, COM21);      break;
-    #endif
-    
-    #if defined(TCCR0A) && defined(COM0A1)
-    case  TIMER0A:  cbi(TCCR0A, COM0A1);    break;
-    #endif
-    
-    #if defined(TCCR0A) && defined(COM0B1)
-    case  TIMER0B:  cbi(TCCR0A, COM0B1);    break;
-    #endif
-    #if defined(TCCR2A) && defined(COM2A1)
-    case  TIMER2A:  cbi(TCCR2A, COM2A1);    break;
-    #endif
-    #if defined(TCCR2A) && defined(COM2B1)
-    case  TIMER2B:  cbi(TCCR2A, COM2B1);    break;
-    #endif
-    
-    #if defined(TCCR3A) && defined(COM3A1)
-    case  TIMER3A:  cbi(TCCR3A, COM3A1);    break;
-    #endif
-    #if defined(TCCR3A) && defined(COM3B1)
-    case  TIMER3B:  cbi(TCCR3A, COM3B1);    break;
-    #endif
-    #if defined(TCCR3A) && defined(COM3C1)
-    case  TIMER3C:  cbi(TCCR3A, COM3C1);    break;
-    #endif
+#if defined(TCCR1A) && defined(COM1A1)
+  case TIMER1A:
+    cbi(TCCR1A, COM1A1);
+    break;
+#endif
+#if defined(TCCR1A) && defined(COM1B1)
+  case TIMER1B:
+    cbi(TCCR1A, COM1B1);
+    break;
+#endif
+#if defined(TCCR1A) && defined(COM1C1)
+  case TIMER1C:
+    cbi(TCCR1A, COM1C1);
+    break;
+#endif
 
-    #if defined(TCCR4A) && defined(COM4A1)
-    case  TIMER4A:  cbi(TCCR4A, COM4A1);    break;
-    #endif					
-    #if defined(TCCR4A) && defined(COM4B1)
-    case  TIMER4B:  cbi(TCCR4A, COM4B1);    break;
-    #endif
-    #if defined(TCCR4A) && defined(COM4C1)
-    case  TIMER4C:  cbi(TCCR4A, COM4C1);    break;
-    #endif			
-    #if defined(TCCR4C) && defined(COM4D1)
-    case TIMER4D:	cbi(TCCR4C, COM4D1);	break;
-    #endif			
-      
-    #if defined(TCCR5A)
-    case  TIMER5A:  cbi(TCCR5A, COM5A1);    break;
-    case  TIMER5B:  cbi(TCCR5A, COM5B1);    break;
-    case  TIMER5C:  cbi(TCCR5A, COM5C1);    break;
-    #endif
+#if defined(TCCR2) && defined(COM21)
+  case TIMER2:
+    cbi(TCCR2, COM21);
+    break;
+#endif
+
+#if defined(TCCR0A) && defined(COM0A1)
+  case TIMER0A:
+    cbi(TCCR0A, COM0A1);
+    break;
+#endif
+
+#if defined(TCCR0A) && defined(COM0B1)
+  case TIMER0B:
+    cbi(TCCR0A, COM0B1);
+    break;
+#endif
+#if defined(TCCR2A) && defined(COM2A1)
+  case TIMER2A:
+    cbi(TCCR2A, COM2A1);
+    break;
+#endif
+#if defined(TCCR2A) && defined(COM2B1)
+  case TIMER2B:
+    cbi(TCCR2A, COM2B1);
+    break;
+#endif
+
+#if defined(TCCR3A) && defined(COM3A1)
+  case TIMER3A:
+    cbi(TCCR3A, COM3A1);
+    break;
+#endif
+#if defined(TCCR3A) && defined(COM3B1)
+  case TIMER3B:
+    cbi(TCCR3A, COM3B1);
+    break;
+#endif
+#if defined(TCCR3A) && defined(COM3C1)
+  case TIMER3C:
+    cbi(TCCR3A, COM3C1);
+    break;
+#endif
+
+#if defined(TCCR4A) && defined(COM4A1)
+  case TIMER4A:
+    cbi(TCCR4A, COM4A1);
+    break;
+#endif
+#if defined(TCCR4A) && defined(COM4B1)
+  case TIMER4B:
+    cbi(TCCR4A, COM4B1);
+    break;
+#endif
+#if defined(TCCR4A) && defined(COM4C1)
+  case TIMER4C:
+    cbi(TCCR4A, COM4C1);
+    break;
+#endif
+#if defined(TCCR4C) && defined(COM4D1)
+  case TIMER4D:
+    cbi(TCCR4C, COM4D1);
+    break;
+#endif
+
+#if defined(TCCR5A)
+  case TIMER5A:
+    cbi(TCCR5A, COM5A1);
+    break;
+  case TIMER5B:
+    cbi(TCCR5A, COM5B1);
+    break;
+  case TIMER5C:
+    cbi(TCCR5A, COM5C1);
+    break;
+#endif
   }
 }
