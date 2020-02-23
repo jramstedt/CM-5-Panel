@@ -26,7 +26,7 @@
                 "_DEBUG",
                 "UNICODE",
                 "_UNICODE",
-                "__AVR_ATmega328P__"
+                "__AVR_ATmega168__"
             ],
             "windowsSdkVersion": "10.0.18362.0",
             "compilerPath": "${config:arduino.path}\\hardware\\tools\\avr\\bin\\avr-gcc.exe",
