@@ -268,15 +268,12 @@ void writeRows() {
   ledRow = ++ledRow & 0x0F;
 }
 
-ISR(TIMER2_COMPA_vect)
-{
+ISR(TIMER2_COMPA_vect) {
   writeRows();
 }
 
-static void turnOffPWM(uint8_t timer)
-{
-  switch (timer)
-  {
+static void turnOffPWM(uint8_t timer) {
+  switch (timer) {
 #if defined(TCCR1A) && defined(COM1A1)
   case TIMER1A:
     cbi(TCCR1A, COM1A1);
