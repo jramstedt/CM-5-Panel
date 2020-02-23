@@ -1,3 +1,5 @@
+#pragma GCC optimize ("O3")
+
 #include <Arduino.h>
 #include <assert.h>
 
@@ -68,7 +70,7 @@ pin pinBtn;
 
 #pragma region CM5 screen
 
-#define NUM_PANELS 3
+#define NUM_PANELS 4
 #define NUM_ROWS 32 	/* unique rows */
 #define NUM_ROWS_DISPLAYED 106	/* total rows in front panel display */
 
@@ -122,11 +124,11 @@ void setup() {
   SET_LOW(pinSTR);
   SET_LOW(pinSCK);
 
-  // 16000000 hz / 128 / 16 / 65 = 120,19 Hz
+  // 16000000 hz / 1024 / 16 / 16 = 61,04 Hz
   TCCR2A = 1 << WGM21; // CTC
-  TCCR2B = 1 << CS22 | 1 << CS20; // Clock / 128
+  TCCR2B = 1 << CS22 | 1 << CS21 | 1 << CS20; // Clock / 1023
   TCNT2  = 0; // Clear counter
-  OCR2A = 64; // Compare value
+  OCR2A = 16; // Compare value
   TIMSK2 = 1 << OCIE2A; // TIMER2_COMPA_vect
 
   reset();
