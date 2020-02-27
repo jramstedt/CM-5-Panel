@@ -22,9 +22,9 @@ static void turnOffPWM(uint8_t timer);
 #define M_OE0 A4
 #define M_OE1 A5
 
-#define M_A0 (12)
+#define M_A0 (10)
 #define M_A1 (11)
-#define M_A2 (10)
+#define M_A2 (12)
 
 #define MODE_BUTTON A0
 
@@ -263,7 +263,7 @@ void writeRows() {
   SET_TO(pinA2, (ledRow & 0x04) != 0);
 
   SET_LOW(pinSTR);
-  if (ledRow & 0x08) SET_HIGH(pinOE1); else SET_HIGH(pinOE0);
+  if (ledRow & 0x08) SET_HIGH(pinOE0); else SET_HIGH(pinOE1);
 
   ledRow = ++ledRow & 0x0F;
 }
