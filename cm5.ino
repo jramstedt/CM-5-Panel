@@ -22,9 +22,9 @@ static void turnOffPWM(uint8_t timer);
 #define M_OE0 A4
 #define M_OE1 A5
 
-#define M_A0 (10)
+#define M_A0 (12)
 #define M_A1 (11)
-#define M_A2 (12)
+#define M_A2 (10)
 
 #define MODE_BUTTON A0
 
@@ -82,11 +82,11 @@ pin pinBtn;
 #define NUM_ROWS_DISPLAYED 106	/* total rows in front panel display */
 
 #ifdef CLONE_PANEL
-#define NUM_PANELS 1
+#define NUM_PANELS 2
 #define NUM_DATA_ROWS NUM_ROWS
 #else
 #define NUM_PANELS 2
-#define NUM_DATA_ROWS NUM_PANELS *NUM_ROWS
+#define NUM_DATA_ROWS NUM_PANELS * NUM_ROWS
 #endif
 
 #define RNUM_SEED 0xBAD /* :-) */
@@ -154,7 +154,7 @@ void setup() {
   TCCR2A = 1 << WGM21;                        // CTC
   TCCR2B = 1 << CS22 | 0 << CS21 | 1 << CS20; // Clock / 128
   TCNT2 = 0;                                  // Clear counter
-  OCR2A = 65;                                 // Compare value
+  OCR2A = 130;                                 // Compare value
   TIMSK2 = 1 << OCIE2A;                       // TIMER2_COMPA_vect
 
   reset();
@@ -258,9 +258,9 @@ void writeRows() {
     }
   }
 
-  SET_TO(pinA0, (ledRow & 0x01) != 0);
-  SET_TO(pinA1, (ledRow & 0x02) != 0);
-  SET_TO(pinA2, (ledRow & 0x04) != 0);
+  SET_TO(pinA0, (ledRow & 0x01) == 0);
+  SET_TO(pinA1, (ledRow & 0x02) == 0);
+  SET_TO(pinA2, (ledRow & 0x04) == 0);
 
   SET_LOW(pinSTR);
   if (ledRow & 0x08) SET_HIGH(pinOE0); else SET_HIGH(pinOE1);
