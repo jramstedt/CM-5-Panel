@@ -154,7 +154,7 @@ void setup() {
   TCCR2A = 1 << WGM21;                        // CTC
   TCCR2B = 1 << CS22 | 0 << CS21 | 1 << CS20; // Clock / 128
   TCNT2 = 0;                                  // Clear counter
-  OCR2A = 130;                                 // Compare value
+  OCR2A = 65;                                 // Compare value
   TIMSK2 = 1 << OCIE2A;                       // TIMER2_COMPA_vect
 
   reset();
