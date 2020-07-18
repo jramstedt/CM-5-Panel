@@ -13,9 +13,9 @@ static void turnOffPWM(uint8_t timer);
 #define M_C 4
 #define M_D 5
 
-#define M_R 6
+#define M_R 7
 
-#define M_OE 7
+#define M_OE 6
 #define M_STR 8
 #define M_SCK 9
 
