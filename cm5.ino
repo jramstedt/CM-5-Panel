@@ -74,11 +74,11 @@ pin pinBtn;
 #define NUM_ROWS_DISPLAYED 106 /* total rows in front panel display */
 
 #ifdef CLONE_PANEL
-#define NUM_PANELS 1
+#define NUM_PANELS 4
 #define NUM_DATA_ROWS NUM_ROWS
 #else
 #define NUM_PANELS 4
-#define NUM_DATA_ROWS NUM_PANELS *NUM_ROWS
+#define NUM_DATA_ROWS NUM_PANELS * NUM_ROWS
 #endif
 
 #define RNUM_SEED 0xBAD /* :-) */
