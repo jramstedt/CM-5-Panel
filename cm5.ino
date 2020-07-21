@@ -196,13 +196,17 @@ void loop() {
   }
 
   if (mode == 5) {
-    for (uint8_t row = 0; row < (NUM_DATA_ROWS >> 1); row++) {
+    #define HALF_NUM_DATA_ROWS (NUM_DATA_ROWS >> 1)
+    for (uint8_t row = 0; row < HALF_NUM_DATA_ROWS; row++) {
       for (uint8_t column = 0; column < 16; column++) {
         uint16_t bit_lower = get_random_bit();
         uint16_t bit_upper = get_random_bit();
 
-        rows[row] = rows[row + (NUM_DATA_ROWS >> 1)] <<= 1;
-        rows[row] = rows[row + (NUM_DATA_ROWS >> 1)] |= bit_lower;
+        rows[row] <<= 1;
+        rows[row] |= bit_upper;
+
+        rows[row + HALF_NUM_DATA_ROWS] <<= 1;
+        rows[row + HALF_NUM_DATA_ROWS] |= bit_lower;
       }
     }
   } else {
