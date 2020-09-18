@@ -6,6 +6,8 @@
 #include <wiring_private.h>
 static void turnOffPWM(uint8_t timer);
 
+#include "font.h"
+
 #define CLONE_PANEL
 
 #define M_A 2
