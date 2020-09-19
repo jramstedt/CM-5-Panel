@@ -21,7 +21,9 @@ static void turnOffPWM(uint8_t timer);
 #define M_STR 8
 #define M_SCK 9
 
-#define MODE_BUTTON 10
+#define ROTARY_BUTTON 10
+#define ROTARY_A 11
+#define ROTARY_B 12
 
 #pragma region pin struct
 struct pin {
@@ -35,6 +37,7 @@ struct pin {
 #define SET_LOW(p) (*p.out &= ~p.bit)
 #define IS_HIGH(p) ((*p.in & p.bit) ? true : false)
 #define IS_LOW(p) ((*p.in & p.bit) ? false : true)
+#define GET(p) (*p.in & p.bit)
 
 pin setupPin(uint8_t pinNumber, uint8_t pinMode = OUTPUT) {
   uint8_t timer = digitalPinToTimer(pinNumber);
@@ -68,7 +71,7 @@ pin setupPin(uint8_t pinNumber, uint8_t pinMode = OUTPUT) {
 #pragma endregion
 
 pin pinA, pinB, pinC, pinD, pinR, pinOE, pinSTR, pinSCK;
-pin pinBtn;
+pin pinBtn, pinRotA, pinRotB;
 
 #pragma region CM5 screen
 
@@ -82,6 +85,8 @@ pin pinBtn;
 #define NUM_PANELS 4
 #define NUM_DATA_ROWS NUM_PANELS * NUM_ROWS
 #endif
+
+#define VIRTUAL_PANEL_COUNT (NUM_DATA_ROWS / NUM_ROWS)
 
 #define RNUM_SEED 0xBAD /* :-) */
 
@@ -98,11 +103,38 @@ PROGMEM const uint16_t rows_glitch[] = {
  */
 uint16_t rows[NUM_DATA_ROWS];
 
-uint16_t rnum = RNUM_SEED;
+/* A Galois LFSR requires a different seed to produce the same output
+ */
+uint16_t rnum = 0x917D; //RNUM_SEED;
 
 #pragma endregion
 
-uint8_t mode = 7;
+
+/*
+  The rotary switch settings are as follows:
+
+  (0) freeze leds
+  (1) fast copy leds from pm to led panel
+  (2) freeze leds
+  (3) copy from pm and display interleaved
+  (4) freeze leds
+  (5) random and pleasing
+  (6) freeze leds
+  (7) interleaved display of random and pleasing
+  (8) freeze leds
+  (9) all leds on
+  (A) all leds off
+  (B) continuous blink leds on then off
+  (C) continuous test mode
+  (D) display pm loop connnectivity on LEDs
+  (E) freeze
+  (F) freeze
+*/
+const uint8_t supportedModes[] = {0x5, 0x6, 0x7, 0x8, 0x9, 0xA, 0xB};
+
+uint16_t modeCounter = 2;
+uint8_t mode = supportedModes[modeCounter];
+bool rotAPrev = 0;
 
 // the setup function runs once when you press reset or power the board
 void setup() {
@@ -115,7 +147,9 @@ void setup() {
   pinSTR = setupPin(M_STR);
   pinSCK = setupPin(M_SCK);
 
-  pinBtn = setupPin(MODE_BUTTON, INPUT_PULLUP);
+  pinBtn = setupPin(ROTARY_BUTTON, INPUT_PULLUP);
+  pinRotA = setupPin(ROTARY_A, INPUT_PULLUP);
+  pinRotB = setupPin(ROTARY_B, INPUT_PULLUP);
 
   SET_LOW(pinA);
   SET_LOW(pinB);
@@ -133,25 +167,25 @@ void setup() {
   OCR2A = 65;                                 // Compare value
   TIMSK2 = 1 << OCIE2A;                       // TIMER2_COMPA_vect
 
+  rotAPrev = GET(pinRotA);
+
   reset();
 }
 
-static uint16_t get_random_bit(void) {
-  /* https://en.wikipedia.org/wiki/Linear_feedback_shift_register
-   * Primitive polynomial: x^16 + x^15 + x^13 + x^4 + 1
-   */
-  uint16_t lfsr_bit = ((rnum >> 0) ^ (rnum >> 1) ^ (rnum >> 3) ^ (rnum >> 12)) & 1;
+/* https://en.wikipedia.org/wiki/Linear_feedback_shift_register
+ * Primitive polynomial: x^16 + x^15 + x^13 + x^4 + 1
+ */
+static uint16_t get_random_bit_galois(void) {
+	uint16_t out_bit = rnum & 1;
+	uint16_t rand_bit = (rnum | (rnum >> 2)) & 1;
 
-  uint16_t rand_bit = (rnum | (rnum >> 2)) & 1;
+	rnum >>= 1;
+	rnum ^= (-out_bit) & 0xD008;
 
-  rnum = (lfsr_bit << 15) | (rnum >> 1);
-
-  return rand_bit;
+	return rand_bit;
 }
 
 void reset() {
-#define VIRTUAL_PANEL_COUNT (NUM_DATA_ROWS / NUM_ROWS)
-
   /* Initial state: all but 3 LEDs lit */
   memset(rows, 0, sizeof(rows));
   for (uint8_t panel = 0; panel < VIRTUAL_PANEL_COUNT; ++panel)
@@ -166,17 +200,12 @@ void reset() {
 void loop() {
   unsigned long nextLoop = millis() + 200;
 
-  if (IS_LOW(pinBtn)) {
-    mode = mode == 7 ? 5 : 7;
-    return reset();
-  }
-
-  if (mode == 5) {
+  if (mode == 0x05) { /* "random and pleasing" */
     #define HALF_NUM_DATA_ROWS (NUM_DATA_ROWS >> 1)
     for (uint8_t row = 0; row < HALF_NUM_DATA_ROWS; row++) {
       for (uint8_t column = 0; column < 16; column++) {
-        uint16_t bit_lower = get_random_bit();
-        uint16_t bit_upper = get_random_bit();
+        uint16_t bit_lower = get_random_bit_galois();
+        uint16_t bit_upper = get_random_bit_galois();
 
         rows[row] <<= 1;
         rows[row] |= bit_upper;
@@ -185,19 +214,41 @@ void loop() {
         rows[row + HALF_NUM_DATA_ROWS] |= bit_lower;
       }
     }
-  } else {
+  } else if (mode == 0x07) { /* "interleaved display of random and pleasing" */
     for (int8_t row = NUM_DATA_ROWS - 1; row >= 0; --row) {
-      uint16_t bit = get_random_bit();
+      uint16_t bit = get_random_bit_galois();
 
       if (row & 4) // Shift in groups of four rows
         rows[row] = (bit << 15) | (rows[row] >> 1);
       else
         rows[row] = (rows[row] << 1) | bit;
     }
+  } else if (mode == 0x09) { /* "all leds on" */
+    memset(rows, 0x00, sizeof(rows));
+  } else if (mode == 0x0A) { /* "all leds off" */
+    memset(rows, 0xFF, sizeof(rows));
+  } else if (mode == 0x0B) { /* "continuous blink leds on then off" */
+    uint8_t led = rows[3] & 0x01 ? 0x00 : 0xFF;
+    memset(rows, led, sizeof(rows));
+  } else {
+    // Freeze leds
   }
 
-  while (millis() < nextLoop)
+  while (millis() < nextLoop) {
+    bool rotA = GET(pinRotA);
+    bool rotB = GET(pinRotB);
+    if (rotA == true && rotAPrev == false) {
+      if (IS_LOW(pinBtn))
+        reset();
+      else if (rotB == true)
+        mode = supportedModes[++modeCounter % sizeof(supportedModes)];
+      else
+        mode = supportedModes[--modeCounter % sizeof(supportedModes)];
+    }
+    rotAPrev = rotA;
+
     yield();
+  }
 }
 
 /*
