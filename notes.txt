@@ -1,0 +1,158 @@
+From https://web.archive.org/web/20171117200718/http://www.housedillon.com/?p=1272&cpage=1
+
+Jim on February 1, 2016 - 2:43 pm
+
+Yes, it’s true, I designed the LED panels for TMC back in 1991.
+
+Once we decided on the concept, I had to figure out how to get the data from
+the Processor Modules (pm, or Vector units as Sam stated) over to the LED
+panels. Trying to do it with a parallel bus was way to many wires, so a serial
+protocol made much more sense. The 74BCT8244 (or maybe it was a different
+family with the same functionality) is an octal buffer with JTAG. This
+provides both the serial protocol, and a driver for the LEDs.
+
+If I recall correctly, each of the LED panels supports two JTAG chains going
+out to two cages of pm modules. An Intel 8741 micro controls each LED panel.
+Four LED panels are used on the end of each rack. There is a single ribbon
+cable that connects the LED panels together, and to a rotary switch that is
+used to set the mode of operation. The LED panels operate independently, but
+are synchronize to each other through the ribbon cable.
+
+The rotary switch settings are as follows:
+
+(0) freeze leds
+(1) fast copy leds from pm to led panel
+(2) freeze leds
+(3) copy from pm and display interleaved
+(4) freeze leds
+(5) random and pleasing
+(6) freeze leds
+(7) interleaved display of random and pleasing
+(8) freeze leds
+(9) all leds on
+(A) all leds off
+(B) continuous blink leds on then off
+(C) continuous test mode
+(D) display pm loop connnectivity on LEDs
+(E) freeze
+(F) freeze
+
+So you probably ask “Why so many settings for freeze leds?” Well, it was
+requested that these be inserted between each major mode so that we could stop
+the LED updates, providing the professional photographers a static image when
+they were doing their marketing photos!
+
+The other thing that might be of interest is the Test Mode. Test mode is run
+at power-up and continuously when in mode C. The hardware is tested in the
+following order:
+
+(1) The status LED is checked.
+(2) The checksum of 8751 code prom is verified.
+(3) The registers inside 8751 are checked.
+(4) The ram inside 8751 is checked.
+(5) The LED and PM scan chains are checked for connectivity
+and proper length.
+
+Failures are signaled in the (single) status led by blinking a code with the
+red status LED. The error code is set equal to the test number as indicated
+above. After an error is detected and it is signaled, that test is aborted and
+the next test starts. There is a two second pause between signalling errors
+from different tests.
+
+There was also a question about the source of the “random and pleasing”
+pattern. Yes, it is a 16-bit pseudo random number generator, using the
+primitive polynomial:
+
+1 + X + X^3 + X^12 + X^16
+
+This didn’t produce quite the effect that was desired, so the 8751 code did an
+XOR of the two least significant bits to generate the bit that was to be used
+in the “random and pleasing” shift pattern.
+
+Hope that sheds some light (pun intended) on the operation of the CM5 LED
+panels.
+
+Jim on April 4, 2016 - 6:03 am
+
+Sorry not to get back to you sooner, but it looks like you’re having so much
+fun with this.
+
+The controller is an 8-bit processor, the Intel 8741. The code was written
+in Intel Macro Assembler. So the random number, RNUM, occupies two bytes.
+BTW, it doesn’t matter what seed value you use so long as it’s not all zeroes.
+
+There are two JTAG chains (of LEDs) on the panel. If memory serves, the top
+half is one chain, and the bottom half is the other. The JTAG chains act as
+the storage for the pattern. The code calls the RAND subroutine, and gets a
+random bit which is pushed into the top JTAG chain. Then calls RAND again, and
+pushes the next random bit into the lower JTAG chain. Note that RAND shifts
+the primitive polynomial each time it is called. After both JTAG chains get a
+new random bit, they are both shifted. When enough bits are stuffed into the
+JTAG chains for all of the LEDs, the new random pattern is latched in all of
+the LEDs simultaneously. The whole thing is timed so that the LEDs update
+every 200ms. The hardware was designed so that a logic 0 turns the LED on, a
+logic 1 turns the LED off.
+
+Here’s a snippit of the actual code for the random number generator.
+
+            ;This subroutine implements a 16 bit random number generator based
+            ;on the primitive polynomial:
+            ;
+            ;       1 + X + X^3 + X^12 + X^16
+            ;
+            ;The value is stored in memory as RNUM.  This subroutine returns
+            ;with the low order byte of the RNUM in the accumulator and a random
+            ;bit value in the Carry (C) bit.
+            ;
+rand:  mov C, RNUM.0           ;get the units value of the PP
+         jnb RNUM.1, rand1     ;jmp if X = 0
+         cpl C                 ;else compliment C (xor)
+rand1: jnb RNUM.3, rand2       ;jmp if X^3 = 0
+         cpl C                 ;else compliment C (xor)
+rand2:  jnb (RNUM+1).4, rand3  ;jmp if X^12 = 0
+         cpl C                 ;else compliment C (xor)
+rand3:  mov A, RNUM+1          ;get high byte of RNUM
+         rrc A                 ;and rotate down (thru accumulator)
+         mov RNUM+1, A         ;save it back to memory
+         mov A, RNUM           ;get low byte of RNUM
+         rrc A                 ;and rotate down (thru accumulator)
+         mov RNUM, A           ;save it back to memory
+         orl C, RNUM.1         ;set C only 25 percent of the time
+         ret                   ;return
+
+Jim on April 5, 2016 - 10:42 am
+
+Thanks for doing the reformatting. Much easier to read now.
+
+In words, here’s what the subroutine does:
+
+XOR bits 0, 1, 3, 12 of RNUM and put the result in the carry bit.
+Right shift RNUM so that the carry bit is shifted into bit 15 of RNUM, and what
+was bit 0 of RNUM, is shifted into the carry bit.
+
+Remember, there is a call to RAND for each of the two JTAG chains. So each
+chain gets every other bit of the random number. That’s why the OR between
+C and rnum.1 i.e. two adjacent bits of the random number assigned to a
+particular JTAG chain. In reality, it probably doesn’t matter, but that’s what
+I did.
+
+Mark – I’ve been talking about mode 5 – Random and Pleasing.
+There’s also mode 7 – Interleaved Random and Pleasing.
+Not sure which one you’re trying to reproduce. Yes, they both call the same
+RAND subroutine. Regardless, I don’t have any info on what was shown in the
+movie or videos you reference. Perhaps hpux735 can clarify as he has the the
+real panels.
+
+iskunk – No need for my full name, I like to keep a low profile. But thanks.
+Yes, the comment “25 percent of the time” refers to the LED panel, not the
+C bit. Probably could have worded it better.
+
+Jim on April 6, 2016 - 7:05 am
+
+Yup, you got the seed I used. In reality though, it doesn’t matter. Any seed
+value between 0x0001 and 0xFFFF will produce the exact same string of random
+bits. The only difference is the starting point.
+As an example, look at the video, at some random time after start, and take
+16 adjacent bits from the top row. Use this as a seen in your random number
+generator. From this point on, your pattern should match the video.
+
