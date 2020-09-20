@@ -20,7 +20,8 @@
                 "${workspaceFolder}/**",
                 "${config:arduino.path}\\hardware\\tools\\avr\\avr\\include",
                 "${config:arduino.path}\\hardware\\arduino\\avr\\cores\\arduino",
-                "${config:arduino.path}\\hardware\\arduino\\avr\\variants\\eightanaloginputs"
+                "${config:arduino.path}\\hardware\\arduino\\avr\\variants\\eightanaloginputs",
+                "${config:arduino.path}\\hardware\\arduino\\avr\\libraries\\Wire\\**"
             ],
             "defines": [
                 "_DEBUG",
