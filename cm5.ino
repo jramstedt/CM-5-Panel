@@ -6,7 +6,7 @@
 #include "font.h"
 #include "rtc.h"
 
-#define CLONE_PANEL
+//#define CLONE_PANEL
 
 #define M_A 17
 #define M_B 16
@@ -31,6 +31,7 @@ pin pinRtcInt;
 
 #pragma region CM5 screen
 
+#define START_ROW 8
 #define NUM_ROWS 32            /* unique rows */
 #define NUM_ROWS_DISPLAYED 106 /* total rows in front panel display */
 
@@ -176,7 +177,7 @@ void loop() {
 
   if (mode == 0x05) { /* "random and pleasing" */
     #define HALF_NUM_DATA_ROWS (NUM_DATA_ROWS >> 1)
-    for (uint8_t row = 0; row < HALF_NUM_DATA_ROWS; row++) {
+    for (uint8_t row = START_ROW; row < HALF_NUM_DATA_ROWS; row++) {
       for (uint8_t column = 0; column < 16; column++) {
         uint16_t bit_lower = get_random_bit_galois();
         uint16_t bit_upper = get_random_bit_galois();
@@ -189,7 +190,7 @@ void loop() {
       }
     }
   } else if (mode == 0x07) { /* "interleaved display of random and pleasing" */
-    for (int8_t row = NUM_DATA_ROWS - 1; row >= 0; --row) {
+    for (int8_t row = NUM_DATA_ROWS - 1; row >= START_ROW; --row) {
       uint16_t bit = get_random_bit_galois();
 
       if (row & 4) // Shift in groups of four rows
@@ -198,12 +199,12 @@ void loop() {
         rows[row] = (rows[row] << 1) | bit;
     }
   } else if (mode == 0x09) { /* "all leds on" */
-    memset(rows, 0x00, sizeof(rows));
+    memset(&rows[START_ROW], 0x00, sizeof(rows) - sizeof(*rows) * START_ROW);
   } else if (mode == 0x0A) { /* "all leds off" */
-    memset(rows, 0xFF, sizeof(rows));
+    memset(&rows[START_ROW], 0xFF, sizeof(rows) - sizeof(*rows) * START_ROW);
   } else if (mode == 0x0B) { /* "continuous blink leds on then off" */
     uint8_t led = rows[3] & 0x01 ? 0x00 : 0xFF;
-    memset(rows, led, sizeof(rows));
+    memset(&rows[START_ROW], led, sizeof(rows) - sizeof(*rows) * START_ROW);
   } else {
     // Freeze leds
   }
@@ -232,8 +233,33 @@ void loop() {
       }
     }
 
-    if (timeDirty)
+    if (timeDirty) {
+      timeDirty = false;
+
       rtcReadTime(&time);
+
+      uint32_t secLo = pgm_read_dword_near(&font[time.seconds & 0x0F]);
+      uint32_t secHi = pgm_read_dword_near(&font[(time.seconds & 0xF0) >> 4]);
+      uint32_t minLo = pgm_read_dword_near(&font[time.minutes & 0x0F]);
+      uint32_t minHi = pgm_read_dword_near(&font[(time.minutes & 0xF0) >> 4]);
+
+      // character is 4x8 pixels, four characters MMSS
+      for (uint8_t line = 0; line < 8; ++line) {
+        // move one column from font (line) to lsb of each byte
+        uint32_t secLoCol = (secLo >> line) & 0x01010101;
+        uint32_t secHiCol = (secHi >> line) & 0x01010101;
+        uint32_t minLoCol = (minLo >> line) & 0x01010101;
+        uint32_t minHiCol = (minHi >> line) & 0x01010101;
+
+        // pack bit from each byte lsb to sequential bits, also mirrors the order, and moves straight to correct place
+        secLoCol = (secLoCol >> 24 | secLoCol >> 15 | secLoCol >> 6 | secLoCol << 3) & 0x0000000F;
+        secHiCol = (secHiCol >> 20 | secHiCol >> 11 | secHiCol >> 2 | secHiCol << 7) & 0x000000F0;
+        minLoCol = (minLoCol >> 16 | minLoCol >> 7 | minLoCol << 2 | minLoCol << 11) & 0x00000F00;
+        minHiCol = (minHiCol >> 12 | minHiCol >> 3 | minHiCol << 6 | minHiCol << 15) & 0x0000F000;
+        
+        rows[line] = ~(minHiCol | minLoCol | secHiCol | secLoCol);
+      }
+    }
 
     yield();
   }
@@ -255,18 +281,17 @@ void writeRows() {
   SET_LOW(pinSTR);
 
   uint16_t columnMask = 1 << cm5column;
-  uint8_t cm5panelorigin = 0;
+#ifdef CLONE_PANEL
   for (int8_t cm5panel = NUM_PANELS - 1; cm5panel >= 0; --cm5panel) {
-#ifndef CLONE_PANEL
-    cm5panelorigin = cm5panel * NUM_ROWS;
 #endif
-
-    for (int8_t cm5row = 0; cm5row < NUM_ROWS; ++cm5row) { // 32 pixels per matrix panel row
+    for (uint8_t cm5row = 0; cm5row < NUM_DATA_ROWS; ++cm5row) {
       SET_LOW(pinSCK);
-      SET_TO(pinR, (rows[cm5panelorigin | cm5row] & columnMask) != 0);
+      SET_TO(pinR, (rows[cm5row] & columnMask) != 0);
       SET_HIGH(pinSCK);
     }
+#ifdef CLONE_PANEL
   }
+#endif
 
   SET_TO(pinA, (ledRow & 0x01) != 0);
   SET_TO(pinB, (ledRow & 0x02) != 0);
