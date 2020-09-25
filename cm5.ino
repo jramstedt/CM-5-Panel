@@ -251,7 +251,7 @@ void loop() {
         uint32_t minLoCol = (minLo >> line) & 0x01010101;
         uint32_t minHiCol = (minHi >> line) & 0x01010101;
 
-        // pack bit from each byte lsb to sequential bits, also mirrors the order, and moves straight to correct place
+        // pack lsb from each byte to sequential bits, also mirrors the order, and moves straight to correct place
         secLoCol = (secLoCol >> 24 | secLoCol >> 15 | secLoCol >> 6 | secLoCol << 3) & 0x0000000F;
         secHiCol = (secHiCol >> 20 | secHiCol >> 11 | secHiCol >> 2 | secHiCol << 7) & 0x000000F0;
         minLoCol = (minLoCol >> 16 | minLoCol >> 7 | minLoCol << 2 | minLoCol << 11) & 0x00000F00;
