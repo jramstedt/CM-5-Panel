@@ -31,16 +31,18 @@ pin pinRtcInt;
 
 #pragma region CM5 screen
 
-#define START_ROW 8
+#define NUM_CLOCK_ROWS 8
 #define NUM_ROWS 32            /* unique rows */
 #define NUM_ROWS_DISPLAYED 106 /* total rows in front panel display */
 
 #ifdef CLONE_PANEL
 #define NUM_PANELS 4
 #define NUM_DATA_ROWS NUM_ROWS
+#define CLOCK_LINE_OFFSET = 0
 #else
 #define NUM_PANELS 4
-#define NUM_DATA_ROWS NUM_PANELS * NUM_ROWS
+#define NUM_DATA_ROWS (NUM_PANELS * NUM_ROWS)
+#define CLOCK_LINE_OFFSET ((NUM_PANELS - 1) * NUM_ROWS)
 #endif
 
 #define VIRTUAL_PANEL_COUNT (NUM_DATA_ROWS / NUM_ROWS)
@@ -91,6 +93,13 @@ const uint8_t supportedModes[] = {0x5, 0x6, 0x7, 0x8, 0x9, 0xA, 0xB};
 uint16_t modeCounter = 2;
 uint8_t mode = supportedModes[modeCounter];
 bool rotAPrev = 0;
+bool buttonPrev = false;
+uint32_t lastPressed;
+
+#define UI_SET_MODE 0
+#define UI_SET_HOURS 1
+#define UI_SET_MINUTES 2
+uint8_t uiMode = UI_SET_MODE;
 
 bcdTime time = (bcdTime) {
   .seconds = 0x11,
@@ -135,8 +144,6 @@ void setup() {
   OCR2A = 65;                                 // Compare value
   TIMSK2 = 1 << OCIE2A;                       // TIMER2_COMPA_vect
 
-  rotAPrev = GET(pinRotA);
-
   if(rtcBegin()) {
     rtcEnable1Hz();
 
@@ -145,6 +152,8 @@ void setup() {
   }
 
   reset();
+  
+  rotAPrev = GET(pinRotA) != 0;
 }
 
 /* https://en.wikipedia.org/wiki/Linear_feedback_shift_register
@@ -172,12 +181,46 @@ void reset() {
     memcpy_P(rows + (panel * NUM_ROWS), rows_glitch, sizeof(rows_glitch)); // Initialize rows with glitch pattern
 }
 
+uint8_t bcd2dec (uint8_t bcd) {
+  return (bcd & 0x0F) + ((bcd & 0xF0) >> 4) * 10;
+}
+
+uint8_t dec2bcd (uint8_t dec) {
+  return ((dec % 10) & 0x0F) | (((dec / 10) << 4) & 0xF0);
+}
+
+void drawTime (uint16_t mask = 0xFFFF) {
+  uint32_t minLo = pgm_read_dword_near(&font[time.minutes & 0x0F]);
+  uint32_t minHi = pgm_read_dword_near(&font[(time.minutes & 0xF0) >> 4]);
+  uint32_t hLo = pgm_read_dword_near(&font[time.hour & 0x0F]);
+  uint32_t hHi = pgm_read_dword_near(&font[(time.hour & 0xF0) >> 4]);
+
+  // character is 4x8 pixels, four characters MMSS
+  for (uint8_t line = 0; line < NUM_CLOCK_ROWS; ++line) {
+    // move one column from font (line) to lsb of each byte
+    uint32_t minLoCol = (minLo >> line) & 0x01010101;
+    uint32_t minHiCol = (minHi >> line) & 0x01010101;
+    uint32_t hLoCol = (hLo >> line) & 0x01010101;
+    uint32_t hHiCol = (hHi >> line) & 0x01010101;
+
+    // pack lsb from each byte to sequential bits, also mirrors the order, and moves straight to correct place
+    minLoCol = (minLoCol >> 24 | minLoCol >> 15 | minLoCol >> 6 | minLoCol << 3) & 0x0000000F;
+    minHiCol = (minHiCol >> 20 | minHiCol >> 11 | minHiCol >> 2 | minHiCol << 7) & 0x000000F0;
+    hLoCol = (hLoCol >> 16 | hLoCol >> 7 | hLoCol << 2 | hLoCol << 11) & 0x00000F00;
+    hHiCol = (hHiCol >> 12 | hHiCol >> 3 | hHiCol << 6 | hHiCol << 15) & 0x0000F000;
+    
+    rows[line + CLOCK_LINE_OFFSET] = ~((hHiCol | hLoCol | minHiCol | minLoCol) & mask);
+  }
+}
+
 void loop() {
   unsigned long nextLoop = millis() + 200;
 
   if (mode == 0x05) { /* "random and pleasing" */
     #define HALF_NUM_DATA_ROWS (NUM_DATA_ROWS >> 1)
-    for (uint8_t row = START_ROW; row < HALF_NUM_DATA_ROWS; row++) {
+    for (uint8_t row = 0; row < HALF_NUM_DATA_ROWS; row++) {
+      if (row >= CLOCK_LINE_OFFSET && row < CLOCK_LINE_OFFSET+NUM_CLOCK_ROWS) continue;
+
       for (uint8_t column = 0; column < 16; column++) {
         uint16_t bit_lower = get_random_bit_galois();
         uint16_t bit_upper = get_random_bit_galois();
@@ -190,7 +233,9 @@ void loop() {
       }
     }
   } else if (mode == 0x07) { /* "interleaved display of random and pleasing" */
-    for (int8_t row = NUM_DATA_ROWS - 1; row >= START_ROW; --row) {
+    for (int8_t row = NUM_DATA_ROWS - 1; row >= 0; --row) {
+      if (row >= CLOCK_LINE_OFFSET && row < CLOCK_LINE_OFFSET+NUM_CLOCK_ROWS) continue;
+      
       uint16_t bit = get_random_bit_galois();
 
       if (row & 4) // Shift in groups of four rows
@@ -199,12 +244,15 @@ void loop() {
         rows[row] = (rows[row] << 1) | bit;
     }
   } else if (mode == 0x09) { /* "all leds on" */
-    memset(&rows[START_ROW], 0x00, sizeof(rows) - sizeof(*rows) * START_ROW);
+    memset(&rows[0], 0x00, sizeof(*rows) * CLOCK_LINE_OFFSET); // Before Clock
+    memset(&rows[CLOCK_LINE_OFFSET+NUM_CLOCK_ROWS], 0x00, sizeof(rows) - sizeof(*rows) * (CLOCK_LINE_OFFSET+NUM_CLOCK_ROWS)); // After Clock
   } else if (mode == 0x0A) { /* "all leds off" */
-    memset(&rows[START_ROW], 0xFF, sizeof(rows) - sizeof(*rows) * START_ROW);
+    memset(&rows[0], 0xFF, sizeof(*rows) * CLOCK_LINE_OFFSET); // Before Clock
+    memset(&rows[CLOCK_LINE_OFFSET+NUM_CLOCK_ROWS], 0xFF, sizeof(rows) - sizeof(*rows) * (CLOCK_LINE_OFFSET+NUM_CLOCK_ROWS)); // After Clock
   } else if (mode == 0x0B) { /* "continuous blink leds on then off" */
     uint8_t led = rows[3] & 0x01 ? 0x00 : 0xFF;
-    memset(&rows[START_ROW], led, sizeof(rows) - sizeof(*rows) * START_ROW);
+    memset(&rows[0], led, sizeof(*rows) * CLOCK_LINE_OFFSET); // Before Clock
+    memset(&rows[CLOCK_LINE_OFFSET+NUM_CLOCK_ROWS], led, sizeof(rows) - sizeof(*rows) * (CLOCK_LINE_OFFSET+NUM_CLOCK_ROWS)); // After Clock
   } else {
     // Freeze leds
   }
@@ -214,53 +262,68 @@ void loop() {
 
     #pragma region Rotary Encoder
     bool buttonPressed = IS_LOW(pinBtn);
-    bool rotA = GET(pinRotA);
+    if (buttonPressed) lastPressed = millis();
+    
+    bool rotA = GET(pinRotA) != 0;
     if (rotA == true && rotAPrev == false) {
-      if (GET(pinRotB) == true)
+      if (GET(pinRotB) != 0)
         rotaryDelta = 1;
       else
         rotaryDelta = -1;
     }
-    rotAPrev = rotA;
     #pragma endregion
 
-    if (rotaryDelta != 0) {
-      if (buttonPressed) {
-        reset();
-      } else {
-        modeCounter += rotaryDelta;
-        mode = supportedModes[modeCounter % sizeof(supportedModes)];
+    if (uiMode == UI_SET_MODE) {
+      if (rotaryDelta != 0) {
+        if (buttonPressed) {
+          reset();
+        } else {
+          modeCounter += rotaryDelta;
+          mode = supportedModes[modeCounter % sizeof(supportedModes)];
+        }
+      } else if (!buttonPressed && buttonPrev && (millis() - lastPressed) < 200 ) {
+        uiMode = UI_SET_HOURS;
       }
+    } else if (uiMode == UI_SET_HOURS) {
+      if (rotaryDelta != 0) {
+        uint8_t hour = (bcd2dec(time.hour) + rotaryDelta) % 24;
+        time.hour = dec2bcd(hour);
+        rtcWriteTime(&time);
+      }
+
+      if (millis() & 0x100)
+        drawTime();
+      else
+        drawTime(0x00FF);
+
+      if (!buttonPressed && buttonPrev) uiMode = UI_SET_MINUTES;
+
+      timeDirty = false; // Don't update time struct!
+    } else if (uiMode == UI_SET_MINUTES) {
+      if (rotaryDelta != 0) {
+        uint8_t minutes = (bcd2dec(time.minutes) + rotaryDelta) % 60;
+        time.minutes = dec2bcd(minutes);
+        rtcWriteTime(&time);
+      }
+
+      if (millis() & 0x100)
+        drawTime();
+      else
+        drawTime(0xFF00);
+
+      if (!buttonPressed && buttonPrev) uiMode = UI_SET_MODE;
+
+      timeDirty = false; // Don't update time struct!
     }
 
     if (timeDirty) {
       timeDirty = false;
-
       rtcReadTime(&time);
-
-      uint32_t secLo = pgm_read_dword_near(&font[time.seconds & 0x0F]);
-      uint32_t secHi = pgm_read_dword_near(&font[(time.seconds & 0xF0) >> 4]);
-      uint32_t minLo = pgm_read_dword_near(&font[time.minutes & 0x0F]);
-      uint32_t minHi = pgm_read_dword_near(&font[(time.minutes & 0xF0) >> 4]);
-
-      // character is 4x8 pixels, four characters MMSS
-      for (uint8_t line = 0; line < 8; ++line) {
-        // move one column from font (line) to lsb of each byte
-        uint32_t secLoCol = (secLo >> line) & 0x01010101;
-        uint32_t secHiCol = (secHi >> line) & 0x01010101;
-        uint32_t minLoCol = (minLo >> line) & 0x01010101;
-        uint32_t minHiCol = (minHi >> line) & 0x01010101;
-
-        // pack lsb from each byte to sequential bits, also mirrors the order, and moves straight to correct place
-        secLoCol = (secLoCol >> 24 | secLoCol >> 15 | secLoCol >> 6 | secLoCol << 3) & 0x0000000F;
-        secHiCol = (secHiCol >> 20 | secHiCol >> 11 | secHiCol >> 2 | secHiCol << 7) & 0x000000F0;
-        minLoCol = (minLoCol >> 16 | minLoCol >> 7 | minLoCol << 2 | minLoCol << 11) & 0x00000F00;
-        minHiCol = (minHiCol >> 12 | minHiCol >> 3 | minHiCol << 6 | minHiCol << 15) & 0x0000F000;
-        
-        rows[line] = ~(minHiCol | minLoCol | secHiCol | secLoCol);
-      }
+      drawTime();
     }
 
+    rotAPrev = rotA;
+    buttonPrev = buttonPressed;
     yield();
   }
 }

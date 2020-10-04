@@ -79,10 +79,16 @@ static void rtcReadTime(bcdTime *const time) {
   lastError = -1;
 }
 
+static void rtcStop() {
+  uint8_t statusRegister = rtcReadRegister(STATUS);
+  statusRegister |= 0b10000000; // Set OSF (Stop oscillator)
+  rtcWriteRegister(STATUS, statusRegister);
+}
+
 static void rtcWriteTime(const bcdTime *const time) {
   Wire.beginTransmission(DS3231);
   Wire.write(0x00); // Start of timekeeping registers
-  Wire.write((uint8_t *)time, sizeof(*time));
+  Wire.write((const uint8_t *)time, sizeof(*time));
   Wire.endTransmission();
 
   uint8_t statusRegister = rtcReadRegister(STATUS);
