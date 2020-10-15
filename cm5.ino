@@ -219,17 +219,25 @@ void loop() {
   if (mode == 0x05) { /* "random and pleasing" */
     #define HALF_NUM_DATA_ROWS (NUM_DATA_ROWS >> 1)
     for (uint8_t row = 0; row < HALF_NUM_DATA_ROWS; row++) {
-      if (row >= CLOCK_LINE_OFFSET && row < CLOCK_LINE_OFFSET+NUM_CLOCK_ROWS) continue;
+      uint8_t upperRow = row;
+      uint8_t lowerRow = row + HALF_NUM_DATA_ROWS;
+
+      bool drawUpper = upperRow < CLOCK_LINE_OFFSET || upperRow >= CLOCK_LINE_OFFSET+NUM_CLOCK_ROWS;
+      bool drawLower = lowerRow < CLOCK_LINE_OFFSET || lowerRow >= CLOCK_LINE_OFFSET+NUM_CLOCK_ROWS;
 
       for (uint8_t column = 0; column < 16; column++) {
         uint16_t bit_lower = get_random_bit_galois();
         uint16_t bit_upper = get_random_bit_galois();
 
-        rows[row] <<= 1;
-        rows[row] |= bit_upper;
+        if (drawUpper) {
+          rows[upperRow] <<= 1;
+          rows[upperRow] |= bit_upper;
+        }
 
-        rows[row + HALF_NUM_DATA_ROWS] <<= 1;
-        rows[row + HALF_NUM_DATA_ROWS] |= bit_lower;
+        if (drawLower) {
+          rows[lowerRow] <<= 1;
+          rows[lowerRow] |= bit_lower;
+        }
       }
     }
   } else if (mode == 0x07) { /* "interleaved display of random and pleasing" */
