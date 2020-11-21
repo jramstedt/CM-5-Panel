@@ -129,7 +129,6 @@ void setup() {
   
   pinCLK = setupPin(M_CLK);
   pinSTR = setupPin(M_STR);
-
   pinOE0 = setupPin(M_OE0);
   pinOE1 = setupPin(M_OE1);
   pinA0 = setupPin(M_A0);
