@@ -8,33 +8,33 @@
 
 //#define CLONE_PANEL
 
-#define M_D0 (2)
-#define M_D1 (3)
-#define M_D2 (4)
-#define M_D3 (5)
-#define M_D4 (6)
-#define M_D5 (7)
-#define M_D6 (8)
-#define M_D7 (9)
+#define M_D0 3
+#define M_D1 4
+#define M_D2 5
+#define M_D3 6
+#define M_D4 7
+#define M_D5 8
+#define M_D6 9
+#define M_D7 10
 
-#define M_CLK A2
-#define M_STR A3
-#define M_OE0 A4
-#define M_OE1 A5
+#define M_CLK 14 // A0
+#define M_STR 15 // A1
+#define M_OE0 16 // A2
+#define M_OE1 17 // A3
 
-#define M_A0 (12)
-#define M_A1 (11)
-#define M_A2 (10)
+#define M_A0 13
+#define M_A1 12
+#define M_A2 11
 
-#define ROTARY_BUTTON 13
-#define ROTARY_A 11
-#define ROTARY_B 12
+#define ROTARY_BUTTON A7
+#define ROTARY_A 0
+#define ROTARY_B 1
 
 #define RTC_INT 2
 
 pin pinD0, pinD1, pinD2, pinD3, pinD4, pinD5, pinD6, pinD7;
 pin pinCLK, pinSTR, pinOE0, pinOE1, pinA0, pinA1, pinA2;
-pin pinBtn, pinRotA, pinRotB;
+pin pinRotA, pinRotB;
 pin pinRtcInt;
 
 #pragma region CM5 screen
@@ -50,7 +50,7 @@ pin pinRtcInt;
 #else
 #define NUM_PANELS 2
 #define NUM_DATA_ROWS (NUM_PANELS * NUM_ROWS)
-#define CLOCK_LINE_OFFSET ((NUM_PANELS - 1) * NUM_ROWS)
+#define CLOCK_LINE_OFFSET (NUM_DATA_ROWS - NUM_CLOCK_ROWS)
 #endif
 
 #define VIRTUAL_PANEL_COUNT (NUM_DATA_ROWS / NUM_ROWS)
@@ -136,7 +136,6 @@ void setup() {
   pinA1 = setupPin(M_A1);
   pinA2 = setupPin(M_A2);
 
-  pinBtn = setupPin(ROTARY_BUTTON, INPUT_PULLUP);
   pinRotA = setupPin(ROTARY_A, INPUT_PULLUP);
   pinRotB = setupPin(ROTARY_B, INPUT_PULLUP);
   pinRtcInt = setupPin(RTC_INT, INPUT_PULLUP);
@@ -296,7 +295,7 @@ void loop() {
     int8_t rotaryDelta = 0;
 
     #pragma region Rotary Encoder
-    bool buttonPressed = IS_LOW(pinBtn);
+    bool buttonPressed = analogRead(ROTARY_BUTTON) < 307;  // 0.3*1024
     if (buttonPressed) lastPressed = millis();
     
     bool rotA = GET(pinRotA) != 0;
